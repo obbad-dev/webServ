@@ -93,3 +93,7 @@ void ParseConfig::parse(){
     }
 }
 
+const vector<Server>& ParseConfig::getSrvers() const{
+    return servers;
+}
+

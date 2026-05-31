@@ -3,9 +3,9 @@ NAME := webServ
 CXX := c++
 CXXFLAGS := -Wall -Wextra -Werror -std=c++98
 
-INCLUDES := -Isrc -Isrc/Program -Isrc/classes/location -Isrc/classes/parseConfig -Isrc/classes/server
+INCLUDES := -Isrc -Isrc/Program -Isrc/classes/location -Isrc/classes/parseConfig -Isrc/classes/server -Isrc/classes/openConnection
 
-SRCS := $(wildcard src/Program/*.cpp src/classes/location/*.cpp src/classes/parseConfig/*.cpp src/classes/server/*.cpp)
+SRCS := $(wildcard src/Program/*.cpp src/classes/location/*.cpp src/classes/parseConfig/*.cpp src/classes/server/*.cpp src/classes/openConnection/*.cpp)
 
 OBJ_DIR := obj
 OBJS := $(SRCS:%.cpp=$(OBJ_DIR)/%.o)

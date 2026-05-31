@@ -19,11 +19,16 @@ class ParseConfig
         ParseConfig(string configFile);
         void tokenize();
         void parse();
+        const vector<Server>& getSrvers() const;
+
         void debug(){
+            cout << "--- Parsed Configuration ---" << endl;
             for (size_t i  = 0; i < servers.size(); i++){
-                cout << servers[i].getPort() << endl;
-                cout << servers[i].getRoot() << endl;
+                cout << "Server [" << i << "]:" << endl;
+                cout << "  Port: " << servers[i].getPort() << endl;
+                cout << "  Root: " << servers[i].getRoot() << endl;
             }
+            cout << "----------------------------" << endl;
         }
         ~ParseConfig();
 };

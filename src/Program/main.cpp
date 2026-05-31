@@ -1,4 +1,4 @@
-#include "includes.hpp"
+#include "ServerSide.hpp"
 
 int main (int ac, char *av[])
 {
@@ -11,6 +11,8 @@ int main (int ac, char *av[])
         parseConfig.tokenize();
         parseConfig.parse();
         parseConfig.debug();
+        ServerSide srv = ServerSide(parseConfig);
+        srv.setup();
         // delete parseConfig;
     }
     catch(const std::exception& e)
@@ -19,3 +21,4 @@ int main (int ac, char *av[])
         return 1;
     }
 }
+
