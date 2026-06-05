@@ -10,7 +10,7 @@ int main (int ac, char *av[])
         ParseConfig parseConfig = ParseConfig(fileName);
         parseConfig.tokenize();
         parseConfig.parse();
-        parseConfig.debug();
+        // parseConfig.debug();
         ServerSide srv = ServerSide(parseConfig);
         srv.setup();
         // delete parseConfig;

@@ -38,9 +38,9 @@ void ServerSide::setup(){
         perror("accept");
         throw runtime_error("");
     }
-    char buffer[4096]; // 4KB is usually enough for a simple header
-   std::memset(buffer, 0, 4096);
-   int bytesRead = read(client_fd, buffer, 4095);
+    char buffer[40096];
+   std::memset(buffer, 0, 40096);
+   int bytesRead = read(client_fd, buffer, 40095);
    if (bytesRead < 0) {
        perror("Read failed");
    } else {
@@ -49,8 +49,9 @@ void ServerSide::setup(){
        std::cout << buffer << std::endl;
        std::cout << "--------------------------" << std::endl;
    }
-   std::string response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nHello World!";
-   write(client_fd, response.c_str(), response.length());
+
+//    std::string response = "HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\n"+;
+//    write(client_fd, response.c_str(), response.length());
    close(client_fd);
 
 }
