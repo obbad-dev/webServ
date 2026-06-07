@@ -8,9 +8,11 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <sstream>
 
 ServerSide::ServerSide(ParseConfig &config) : _config(config)
 {
+    httpRequest = HttpRequest();
 }
 
 ServerSide::~ServerSide()
@@ -48,9 +50,11 @@ std::string ServerSide::parseRequest(std::string &buffer)
     // std::cout << "------------------------" << 
     while ((end = buffer.find("\r\n", start)) != string::npos)
     {
+        string line = buffer.substr(start, end - start);
         if (start == 0)
-            
-        // std::cout << buffer.substr(start, end - start) << std::endl;
+        {
+            istringstream iss(line);
+        }
         start = end + 2;
     }
     // std::cout << "------------------------" << std::endl;

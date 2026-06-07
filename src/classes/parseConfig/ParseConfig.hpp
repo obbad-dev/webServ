@@ -1,6 +1,7 @@
 #pragma once
 
 using namespace std;
+
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -23,6 +24,6 @@ public:
 
     void tokenize();
     void parse();
-    const vector<Server> &getSrvers() const;
     void debug();
+    const vector<Server> &getSrvers() const;
 };

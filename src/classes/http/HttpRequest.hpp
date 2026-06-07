@@ -7,7 +7,8 @@ class HttpRequest
 {
 private:
     string method;
-    string path;
+    string target;
+    string protocolVersion;
     map<string, string> headers;
 
 public:
@@ -17,8 +18,10 @@ public:
     const map<string, string> &getHeaders() const;
     const string &getMethod() const;
     const string &getPath() const;
+    const string& getProtocolVersion() const;
 
     void setHeaders(string key, string value);
     void setMethod(string method);
-    void setPath(string path);
+    void setTarget(string target);
+    void setProtocolVersion(string version);
 };
