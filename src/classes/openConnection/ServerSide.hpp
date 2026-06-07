@@ -1,17 +1,22 @@
+#pragma once
+using namespace std;
+
+#include <string>
+
 #include "ParseConfig.hpp"
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <unistd.h>
-#include <fcntl.h>
 
 class ServerSide
 {
-    private:
-        ParseConfig& _config;
-        
-    public:
-        ServerSide(ParseConfig& config);
-        void setup();
-        ~ServerSide();
+private:
+    ParseConfig &_config;
+
+    string readRequest(int &clientFd);
+    string parseRequest(string& buffer);
+
+public:
+    ServerSide(ParseConfig &config);
+    ~ServerSide();
+
+    void setup();
 };
 
