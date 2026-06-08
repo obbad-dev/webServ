@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <sstream>
 
 ServerSide::ServerSide(ParseConfig &config) : _config(config)
 {
@@ -18,105 +17,16 @@ ServerSide::~ServerSide()
 {
 }
 
-string ServerSide::readRequest(int &clientFd)
-{
-    string req;
-    char buffer[4096];
-
-    while (true)
-    {
-        memset(buffer, 0, sizeof(buffer));
-        ssize_t byteRead = recv(clientFd, buffer, sizeof(buffer), 0);
-
-        if (byteRead < 0)
-        {
-            perror("Error");
-            throw runtime_error("");
-        }
-        if (byteRead == 0)
-            break;
-        req.append(buffer, static_cast<size_t>(byteRead));
-    }
-
-    return req;
-}
-
-std::string ServerSide::parseRequest(std::string &buffer)
-{
-    // Ensure full header section was received
-    if (buffer.find("\r\n\r\n") == std::string::npos)
-        throw std::runtime_error("Incomplete HTTP request");
-
-    size_t start = 0;
-    size_t end;
-
-    bool requestLineParsed = false;
-
-    while ((end = buffer.find("\r\n", start)) != std::string::npos)
-    {
-        std::string line = buffer.substr(start, end - start);
-
-        if (line.empty())
-            break;
-
-        if (!requestLineParsed)
-        {
-            std::istringstream iss(line);
-
-            std::string method;
-            std::string target;
-            std::string version;
-            std::string extra;
-
-            if (!(iss >> method >> target >> version))
-                throw std::runtime_error("Invalid request line");
-
-            if (iss >> extra)
-                throw std::runtime_error("Too many fields in request line");
-
-            httpRequest.setMethod(method);
-            httpRequest.setTarget(target);
-            httpRequest.setProtocolVersion(version);
-            requestLineParsed = true;
-        }
-        else
-        {
-            size_t pos = line.find(':');
-
-            if (pos == std::string::npos)
-                throw std::runtime_error("Invalid header: " + line);
-
-            if (pos == 0)
-                throw std::runtime_error("Empty header name");
-
-            std::string key = line.substr(0, pos);
-            std::string value = line.substr(pos + 1);
-            httpRequest.setHeaders(key, value);
-        }
-
-        start = end + 2;
-    }
-
-    if (httpRequest.getProtocolVersion() == "HTTP/1.1")
-    {
-        const map<string, string> &hdrs = httpRequest.getHeaders();
-        map<string, string>::const_iterator it = hdrs.find("Host");
-        if (it == hdrs.end() || it->second == "")
-            throw std::runtime_error("Missing Host header");
-    }
-    debug();
-    return "";
-}
 
 void ServerSide::debug()
 {
     cout << "Method: " << this->httpRequest.getMethod() << '\n';
     cout << "Target: " << this->httpRequest.getPath() << '\n';
     cout << "Protocol: " << this->httpRequest.getProtocolVersion() << '\n';
-    cout << "Headers:" << '\n';
+    cout << "------------Headers-----------" << '\n';
     const map<string, string> &headers = this->httpRequest.getHeaders();
     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
-        cout << "  " << it->first << ": " << it->second << '\n';
+        cout << it->first << ": " << it->second << '\n';
 }
 
 void ServerSide::setup()
@@ -158,18 +68,19 @@ void ServerSide::setup()
         throw runtime_error("");
     }
 
-    string buffer = readRequest(clientFd);
-    parseRequest(buffer);
+    httpRequest.parseRequest(clientFd);
     debug();
 
-    string response =
+    std::string response =
         "HTTP/1.1 200 OK\r\n"
-        "Content-Length: "
+        "Content-Length: 13\r\n" // <-- Added \r\n here
         "Content-Type: text/plain\r\n"
-        "\r\n"
+        "\r\n" // End of headers blank line
         "Hello, World!";
 
     write(clientFd, response.c_str(), response.length());
+
+    // Warning: Be careful with closing serverFd here if you are in a loop!
     close(clientFd);
     close(serverFd);
 }

@@ -10,7 +10,8 @@ private:
     string target;
     string protocolVersion;
     map<string, string> headers;
-
+    string readRequest(int &clientFd);
+    
 public:
     HttpRequest();
     ~HttpRequest();
@@ -24,4 +25,6 @@ public:
     void setMethod(string method);
     void setTarget(string target);
     void setProtocolVersion(string version);
+
+    void parseRequest(int &clientFd);
 };
