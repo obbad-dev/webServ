@@ -14,6 +14,7 @@ private:
 
     string readRequest(int &clientFd);
     string parseRequest(string& buffer);
+    void debug();
 
 public:
     ServerSide(ParseConfig &config);

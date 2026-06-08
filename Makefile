@@ -8,13 +8,15 @@ INCLUDES := -Isrc \
             -Isrc/classes/location \
             -Isrc/classes/parseConfig \
             -Isrc/classes/server \
-            -Isrc/classes/openConnection
+            -Isrc/classes/openConnection \
+            -Isrc/classes/http 
 
 SRCS := $(wildcard src/Program/*.cpp) \
         $(wildcard src/classes/location/*.cpp) \
         $(wildcard src/classes/parseConfig/*.cpp) \
         $(wildcard src/classes/server/*.cpp) \
-        $(wildcard src/classes/openConnection/*.cpp)
+        $(wildcard src/classes/openConnection/*.cpp) \
+        $(wildcard src/classes/http/*.cpp)
 
 OBJ_DIR := obj
 OBJS := $(SRCS:%.cpp=$(OBJ_DIR)/%.o)

@@ -12,7 +12,6 @@
 
 ServerSide::ServerSide(ParseConfig &config) : _config(config)
 {
-    httpRequest = HttpRequest();
 }
 
 ServerSide::~ServerSide()
@@ -44,21 +43,80 @@ string ServerSide::readRequest(int &clientFd)
 
 std::string ServerSide::parseRequest(std::string &buffer)
 {
-    size_t start = 0;
-    size_t end = 0;
+    // Ensure full header section was received
+    if (buffer.find("\r\n\r\n") == std::string::npos)
+        throw std::runtime_error("Incomplete HTTP request");
 
-    // std::cout << "------------------------" << 
-    while ((end = buffer.find("\r\n", start)) != string::npos)
+    size_t start = 0;
+    size_t end;
+
+    bool requestLineParsed = false;
+
+    while ((end = buffer.find("\r\n", start)) != std::string::npos)
     {
-        string line = buffer.substr(start, end - start);
-        if (start == 0)
+        std::string line = buffer.substr(start, end - start);
+
+        if (line.empty())
+            break;
+
+        if (!requestLineParsed)
         {
-            istringstream iss(line);
+            std::istringstream iss(line);
+
+            std::string method;
+            std::string target;
+            std::string version;
+            std::string extra;
+
+            if (!(iss >> method >> target >> version))
+                throw std::runtime_error("Invalid request line");
+
+            if (iss >> extra)
+                throw std::runtime_error("Too many fields in request line");
+
+            httpRequest.setMethod(method);
+            httpRequest.setTarget(target);
+            httpRequest.setProtocolVersion(version);
+            requestLineParsed = true;
         }
+        else
+        {
+            size_t pos = line.find(':');
+
+            if (pos == std::string::npos)
+                throw std::runtime_error("Invalid header: " + line);
+
+            if (pos == 0)
+                throw std::runtime_error("Empty header name");
+
+            std::string key = line.substr(0, pos);
+            std::string value = line.substr(pos + 1);
+            httpRequest.setHeaders(key, value);
+        }
+
         start = end + 2;
     }
-    // std::cout << "------------------------" << std::endl;
+
+    if (httpRequest.getProtocolVersion() == "HTTP/1.1")
+    {
+        const map<string, string> &hdrs = httpRequest.getHeaders();
+        map<string, string>::const_iterator it = hdrs.find("Host");
+        if (it == hdrs.end() || it->second == "")
+            throw std::runtime_error("Missing Host header");
+    }
+    debug();
     return "";
+}
+
+void ServerSide::debug()
+{
+    cout << "Method: " << this->httpRequest.getMethod() << '\n';
+    cout << "Target: " << this->httpRequest.getPath() << '\n';
+    cout << "Protocol: " << this->httpRequest.getProtocolVersion() << '\n';
+    cout << "Headers:" << '\n';
+    const map<string, string> &headers = this->httpRequest.getHeaders();
+    for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+        cout << "  " << it->first << ": " << it->second << '\n';
 }
 
 void ServerSide::setup()
@@ -102,6 +160,7 @@ void ServerSide::setup()
 
     string buffer = readRequest(clientFd);
     parseRequest(buffer);
+    debug();
 
     string response =
         "HTTP/1.1 200 OK\r\n"
