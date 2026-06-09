@@ -31,7 +31,7 @@ void ServerSide::debug()
 
 void ServerSide::setup()
 {
-    const Server &server = _config.getSrvers()[0];
+    // const Server &server = _config.getSrvers()[0];
     int serverFd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (serverFd < 1)
@@ -44,7 +44,7 @@ void ServerSide::setup()
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(server.getPort());
+    // addr.sin_port = htons(server.getPort());
 
     if (bind(serverFd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0)
     {

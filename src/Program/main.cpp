@@ -11,12 +11,13 @@ int main (int ac, char *av[])
             fileName = av[1];
         ParseConfig parseConfig = ParseConfig(fileName);
         ServerSide srv = ServerSide(parseConfig);
-        srv.setup();
+        // srv.setup();
     }
     catch(const exception& e)
     {
         cerr << e.what() << '\n';
         return 1;
     }
+    
 }
 

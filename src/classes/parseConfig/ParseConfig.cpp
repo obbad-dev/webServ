@@ -9,6 +9,7 @@ ParseConfig::ParseConfig(std::string configFile) : _configFile(configFile)
 {
     tokenize();
     parse();
+    debug();
 }
 
 ParseConfig::~ParseConfig()
@@ -24,20 +25,23 @@ void ParseConfig::parseServer(Server &server, size_t &i)
     {
         string currentToken = _tokens[incrIdx(i)];
 
-        if (currentToken == "listen")
-            server.setPort(_tokens[incrIdx(i)]);
+        if (currentToken == "listen"){
+            server.setListen(_tokens[incrIdx(i)]);
+        }
         else if (currentToken == "root")
+        {
             server.setRoot(_tokens[incrIdx(i)]);
+        }
         else if (currentToken == "}")
             break;
         else
             throw invalid_argument("Unsupported directive: '" + currentToken + "'.");
-
+    
         if (_tokens[incrIdx(i)] != ";")
-            throw invalid_argument("Syntax error: line must end with ';'.");
+            throw invalid_argument("Syntax error: too many values in directive " + currentToken);
     }
 
-    if (server.getPort() == -1 || server.getRoot().empty())
+    if (server.getListens().size() == 0 || server.getRoot().empty())
         throw invalid_argument("Config file must contain directives 'listen' and 'root'.");
 }
 
@@ -130,7 +134,9 @@ void ParseConfig::debug()
     for (size_t i = 0; i < servers.size(); ++i)
     {
         cout << "Server [" << i << "]:" << endl;
-        cout << "  Port: " << servers[i].getPort() << endl;
+        const vector<Listen> &listens = servers[i].getListens();
+        for (size_t j = 0; j < listens.size(); j++)
+            cout << "ip: " + listens[j].ip + ", port: " <<  listens[j].port << endl;
         cout << "  Root: " << servers[i].getRoot() << endl;
     }
     cout << "----------------------------" << endl;
