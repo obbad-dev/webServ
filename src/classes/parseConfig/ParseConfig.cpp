@@ -9,13 +9,33 @@ ParseConfig::ParseConfig(std::string configFile) : _configFile(configFile)
 {
     tokenize();
     parse();
-    debug();
+    // debug();
 }
 
 ParseConfig::~ParseConfig()
 {
 }
 
+void ParseConfig::tokenizeErrorPage(vector<string> &errorTokens, size_t &i)
+{
+    string nextToken;
+    while (i < _tokens.size())
+    {
+        nextToken = _tokens[incrIdx(i)];
+        if (nextToken == ";" || nextToken == "{" || nextToken == "}")
+        {
+            i--;
+            break;
+        }
+        errorTokens.push_back(nextToken);
+        if (errorTokens.size() > 100)
+            throw runtime_error("error_page directive too long");
+    }
+    if (nextToken == "{" || nextToken == "}")
+        throw invalid_argument("error_page: expected end with ';'");
+    if (errorTokens.size() < 2)
+        throw invalid_argument("error_page: missing status code or URI");
+}
 void ParseConfig::parseServer(Server &server, size_t &i)
 {
     if (_tokens[incrIdx(i)] != "{")
@@ -25,20 +45,31 @@ void ParseConfig::parseServer(Server &server, size_t &i)
     {
         string currentToken = _tokens[incrIdx(i)];
 
-        if (currentToken == "listen"){
+        if (currentToken == "listen")
+        {
             server.setListen(_tokens[incrIdx(i)]);
         }
         else if (currentToken == "root")
         {
             server.setRoot(_tokens[incrIdx(i)]);
         }
+        else if (currentToken == "client_max_body_size")
+            server.setClientMaxBodySize(_tokens[incrIdx(i)]);
+        else if (currentToken == "error_page")
+        {
+            vector<string> errorTokens;
+            tokenizeErrorPage(errorTokens, i);
+            server.setErrorsPages(errorTokens);
+        }
         else if (currentToken == "}")
             break;
         else
             throw invalid_argument("Unsupported directive: '" + currentToken + "'.");
-    
+
         if (_tokens[incrIdx(i)] != ";")
+        {
             throw invalid_argument("Syntax error: too many values in directive " + currentToken);
+        }
     }
 
     if (server.getListens().size() == 0 || server.getRoot().empty())
@@ -136,8 +167,9 @@ void ParseConfig::debug()
         cout << "Server [" << i << "]:" << endl;
         const vector<Listen> &listens = servers[i].getListens();
         for (size_t j = 0; j < listens.size(); j++)
-            cout << "ip: " + listens[j].ip + ", port: " <<  listens[j].port << endl;
-        cout << "  Root: " << servers[i].getRoot() << endl;
+            cout << "ip: " + listens[j].ip + ", port: " << listens[j].port << endl;
+        cout << "Root: " << servers[i].getRoot() << endl;
+        cout << "client max body size: " << servers[i].getClientMaxBodySize() << "B" << endl;
     }
     cout << "----------------------------" << endl;
 }

@@ -2,6 +2,13 @@
 
 #include <string>
 #include <vector>
+#include <stdint.h>
+#include <map>
+
+const size_t KB_MULTIPLIER = 1024ULL;
+const size_t MB_MULTIPLIER = 1024ULL * 1024ULL;
+const size_t GB_MULTIPLIER = 1024ULL * 1024ULL * 1024ULL;
+
 using namespace std;
 
 struct Listen{
@@ -12,20 +19,29 @@ struct Listen{
     }
 };
 
+
 class Server
 {
-private:
-    // int _port;
-    vector<Listen> listens;
-    string _root;
+    private:
+        vector<Listen> listens;
+        string _root;
+        uint64_t client_max_body_size;
+        bool has_set_client_max_body_size;
+        map<int, string> errors_page;
 
-public:
-    Server();
-    ~Server();
 
-    void setListen(string ip_port);
-    void setRoot(string root);
+    public:
+        Server();
+        ~Server();
 
-    const vector<Listen> &getListens() const;
-    const string &getRoot() const;
+        void setListen(string& );
+        void setRoot(string& );
+        void setClientMaxBodySize(string& );
+        void setErrorsPages(vector<string>& );
+
+        const vector<Listen> &getListens() const;
+        const string &getRoot() const;
+        const uint64_t& getClientMaxBodySize() const;
+        const bool& hasSetClientMaxBodySize() const;
+        const map<int, string>& getErrorsPages() const;
 };

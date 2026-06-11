@@ -114,7 +114,7 @@ string HttpRequest::readRequest(int& clientFd){
     string req;
     char buffer[4096];
 
-    while (true)
+    while (req.find("\r\n\r\n") == string::npos)
     {
         memset(buffer, 0, sizeof(buffer));
         ssize_t byteRead = recv(clientFd, buffer, sizeof(buffer), 0);
@@ -124,10 +124,11 @@ string HttpRequest::readRequest(int& clientFd){
             perror("Error");
             throw runtime_error("");
         }
-        if (byteRead == 0)
-            break;
         req.append(buffer, static_cast<size_t>(byteRead));
     }
+
+    //POST PUT: not handle it
+    
 
     return req;
 }

@@ -44,7 +44,7 @@ void ServerSide::setup()
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    // addr.sin_port = htons(server.getPort());
+    addr.sin_port = htons(8080);
 
     if (bind(serverFd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0)
     {
@@ -60,27 +60,29 @@ void ServerSide::setup()
 
     struct sockaddr_in clientAddr;
     socklen_t clientLen = sizeof(clientAddr);
-    int clientFd = accept(serverFd, reinterpret_cast<struct sockaddr *>(&clientAddr), &clientLen);
-
-    if (clientFd < 0)
+    while (1)
     {
-        perror("accept");
-        throw runtime_error("");
+        int clientFd = accept(serverFd, reinterpret_cast<struct sockaddr *>(&clientAddr), &clientLen);
+        if (clientFd < 0)
+        {
+            perror("accept");
+            throw runtime_error("");
+        }
+    
+        httpRequest.parseRequest(clientFd);
+        debug();
+    
+        std::string response =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Length: 13\r\n" // <-- Added \r\n here
+            "Content-Type: text/plain\r\n"
+            "\r\n" // End of headers blank line
+            "Hello, World!";
+    
+        send(clientFd, response.c_str(), response.length(), 0);
+    
+        // Warning: Be careful with closing serverFd here if you are in a loop!
+        close(clientFd);
     }
-
-    httpRequest.parseRequest(clientFd);
-    debug();
-
-    std::string response =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Length: 13\r\n" // <-- Added \r\n here
-        "Content-Type: text/plain\r\n"
-        "\r\n" // End of headers blank line
-        "Hello, World!";
-
-    write(clientFd, response.c_str(), response.length());
-
-    // Warning: Be careful with closing serverFd here if you are in a loop!
-    close(clientFd);
     close(serverFd);
 }
