@@ -121,10 +121,24 @@ void Server::setClientMaxBodySize(string& token)
     this->client_max_body_size = value * multiplier;
     this->has_set_client_max_body_size = true;
 }
-// void Server::setErrorsPages(vector<string>& errorTokens)
-// {
+void Server::setErrorsPages(vector<string>& errorTokens)
+{
+    string URI = errorTokens.back();
+    errorTokens.pop_back();
 
-// }
+    for (size_t i = 0; i < errorTokens.size(); i++)
+    {
+        char *end;
+        errno = 0;
+        string nbStr = errorTokens[i];
+        long value = strtol(nbStr.c_str(), &end, 10);
+        if (*end != '\0')
+            throw invalid_argument("number of error not valid "+nbStr);
+        else if (errno == ERANGE || value < 400 || value > 500)
+            throw invalid_argument("number of error page must be in range 400 - 500");
+        errors_page[value] = URI;
+    }
+}
 
 const vector<Listen> &Server::getListens() const
 {

@@ -9,7 +9,7 @@ ParseConfig::ParseConfig(std::string configFile) : _configFile(configFile)
 {
     tokenize();
     parse();
-    // debug();
+    debug();
 }
 
 ParseConfig::~ParseConfig()
@@ -170,6 +170,15 @@ void ParseConfig::debug()
             cout << "ip: " + listens[j].ip + ", port: " << listens[j].port << endl;
         cout << "Root: " << servers[i].getRoot() << endl;
         cout << "client max body size: " << servers[i].getClientMaxBodySize() << "B" << endl;
+        string uri;
+        cout << "error_page: ";
+        for (std::map<int, std::string>::const_iterator it = servers[i].getErrorsPages().begin();
+             it != servers[i].getErrorsPages().end(); it++)
+            {
+                uri = it->second;
+               cout << it->first << " ";
+            }
+            cout << uri << endl;
     }
     cout << "----------------------------" << endl;
 }
