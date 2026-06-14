@@ -9,7 +9,7 @@
 #include <linux/limits.h>
 #include <climits>
 
-Server::Server() : _root(""), client_max_body_size(1048576), has_set_client_max_body_size(false) 
+Server::Server() : _root(""), index("index.html"), client_max_body_size(1048576), has_set_client_max_body_size(false) 
 {
 }
 
@@ -17,7 +17,7 @@ Server::~Server()
 {
 }
 
-void Server::setListen(string &ip_port)
+void Server::setListen(const string &ip_port)
 {
     char *endStr = NULL;
     errno = 0;
@@ -73,7 +73,7 @@ void Server::setListen(string &ip_port)
         throw invalid_argument("Listen directive duplicated: " + ip_port);
     listens.push_back(listen);
 }
-void Server::setRoot(string &pathStr)
+void Server::setRoot(const string &pathStr)
 {
     if (!_root.empty())
         throw runtime_error("duplicate root directive in server block");
@@ -82,8 +82,13 @@ void Server::setRoot(string &pathStr)
 
     this->_root = pathStr;
 }
+void Server::setIndex(const string& token){
+    if (token == ";")
+        throw invalid_argument("The 'index' directive is Empty");
+    this->index = token;
+}
 
-void Server::setClientMaxBodySize(string& token)
+void Server::setClientMaxBodySize(const string &token)
 {
     if (has_set_client_max_body_size)
         throw runtime_error("duplicate 'client_max_body_size' directive in server block");
@@ -134,11 +139,15 @@ void Server::setErrorsPages(vector<string>& errorTokens)
         long value = strtol(nbStr.c_str(), &end, 10);
         if (*end != '\0')
             throw invalid_argument("number of error not valid "+nbStr);
-        else if (errno == ERANGE || value < 400 || value > 500)
+        else if (errno == ERANGE || value < 400 || value > 599)
             throw invalid_argument("number of error page must be in range 400 - 500");
         errors_page[value] = URI;
     }
 }
+void Server::pushLocation(LocationConf& location){
+    locations.push_back(location);
+}
+
 
 const vector<Listen> &Server::getListens() const
 {
@@ -147,6 +156,9 @@ const vector<Listen> &Server::getListens() const
 const string &Server::getRoot() const
 {
     return this->_root;
+}
+const string &Server::getIndex() const{
+    return this->index;
 }
 const uint64_t &Server::getClientMaxBodySize() const
 {
@@ -158,4 +170,9 @@ const bool& Server::hasSetClientMaxBodySize() const
 }
 const map<int, string>& Server::getErrorsPages() const {
     return this->errors_page;
+}
+
+const vector<LocationConf> &Server::getLocations() const
+{
+    return this->locations;
 }
