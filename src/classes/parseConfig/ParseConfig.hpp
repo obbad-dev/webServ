@@ -17,6 +17,7 @@ private:
 
     void parseServer(Server &server, size_t &i);
     void tokenizeErrorPage(vector<string> &, size_t &);
+    const vector<string> tokenizeMethods(size_t& i);
     void parseLocations(Server &server, size_t &i);
     const string &consumeToken(size_t &i);
 

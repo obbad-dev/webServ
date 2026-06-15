@@ -16,33 +16,27 @@ ParseConfig::~ParseConfig()
 {
 }
 
-void ParseConfig::tokenizeErrorPage(vector<string> &errorTokens, size_t &i)
-{
-    while (i < _tokens.size())
-    {
-        const string &token = consumeToken(i);
-        if (token == ";")
-            break;
-        if (token == "{" || token == "}")
-            throw invalid_argument("error_page: expected end with ';'");
-        errorTokens.push_back(token);
-    }
-    if (errorTokens.size() < 2)
-        throw invalid_argument("error_page: missing status code or URI");
-}
-void ParseConfig::parseLocations(Server& server, size_t& i)
+void ParseConfig::parseLocations(Server &server, size_t &i)
 {
     LocationConf locationConf;
     locationConf.setPath(consumeToken(i));
+    bool needsSemicolon = true;
     if (consumeToken(i) != "{")
         throw invalid_argument("directive \"location\" has no opening \"{\"");
     while (i < _tokens.size())
     {
-        const string& currToken = consumeToken(i);
-        if (currToken == "}")
+        const string &currToken = consumeToken(i);
+        if (currToken == "allow_methods")
+        {
+            locationConf.setAllowMethods(tokenizeMethods(i));
+            needsSemicolon = false;
+        }
+        else if (currToken == "}")
             break;
         else
-            throw invalid_argument("unexpected token '"+currToken+"'");
+            throw invalid_argument("unexpected token '" + currToken + "'");
+        if (needsSemicolon && consumeToken(i) != ";")
+            throw invalid_argument("Syntax error: too many values in directive " + currToken);
     }
     server.pushLocation(locationConf);
 }
@@ -58,102 +52,34 @@ void ParseConfig::parseServer(Server &server, size_t &i)
 
         bool needsSemicolon = true;
 
-        if (currentToken == "listen")
-        {
+        if (currentToken == "}")
+            break;
+        else if (currentToken == "listen")
             server.setListen(consumeToken(i));
-        }
         else if (currentToken == "root")
-        {
             server.setRoot(consumeToken(i));
-        }
         else if (currentToken == "index")
-        {
             server.setIndex(consumeToken(i));
-        }
         else if (currentToken == "client_max_body_size")
             server.setClientMaxBodySize(consumeToken(i));
-        else if (currentToken == "error_page")
-        {
+        else if (currentToken == "error_page"){
             vector<string> errorTokens;
             tokenizeErrorPage(errorTokens, i);
             server.setErrorsPages(errorTokens);
             needsSemicolon = false;
         }
-        else if (currentToken == "location")
-        {
+        else if (currentToken == "location"){
             parseLocations(server, i);
             needsSemicolon = false;
         }
-        else if (currentToken == "}")
-            break;
         else
             throw invalid_argument("Unsupported directive: '" + currentToken + "'.");
 
         if (needsSemicolon && consumeToken(i) != ";")
-        {
             throw invalid_argument("Syntax error: too many values in directive " + currentToken);
-        }
     }
-
     if (server.getListens().size() == 0 || server.getRoot().empty())
         throw invalid_argument("Config file must contain directives 'listen' and 'root'.");
-}
-
-const string &ParseConfig::consumeToken(size_t &i)
-{
-    if (i >= _tokens.size())
-        throw invalid_argument("Block not completed.");
-    return _tokens[i++];
-}
-
-void ParseConfig::tokenize()
-{
-    ifstream file(_configFile.c_str());
-    if (!file.is_open())
-        throw runtime_error("Error: Could not open config file: " + _configFile);
-
-    string line;
-    stack<std::string> bracesCheck;
-
-    while (getline(file, line))
-    {
-        size_t commentPos = line.find('#');
-        if (commentPos != std::string::npos)
-            line = line.substr(0, commentPos);
-
-        if (line.empty())
-            continue;
-
-        for (size_t i = 0; i < line.length(); ++i)
-        {
-            if (line[i] == '{' || line[i] == '}' || line[i] == ';')
-            {
-                line.insert(i + 1, " ");
-                line.insert(i, " ");
-                i += 2;
-            }
-        }
-
-        istringstream iss(line);
-        string word;
-
-        while (iss >> word)
-        {
-            if (word == "{" || word == "}")
-            {
-                if (word == "{")
-                    bracesCheck.push(word);
-                else if (!bracesCheck.empty() && word == "}" && bracesCheck.top() == "{")
-                    bracesCheck.pop();
-                else
-                    throw runtime_error("Error: Unmatched closing brace '}'");
-            }
-            _tokens.push_back(word);
-        }
-    }
-
-    if (!bracesCheck.empty())
-        throw runtime_error("Error: Unclosed brace '{'");
 }
 
 void ParseConfig::parse()
@@ -198,16 +124,24 @@ void ParseConfig::debug()
         cout << "error_page: ";
         for (std::map<int, std::string>::const_iterator it = servers[i].getErrorsPages().begin();
              it != servers[i].getErrorsPages().end(); it++)
-            {
-                uri = it->second;
-               cout << it->first << " ";
-            }
-            cout << uri << endl;
+        {
+            uri = it->second;
+            cout << it->first << " ";
+        }
+        cout << uri << endl;
 
         cout << "Locations:" << endl;
         const vector<LocationConf> &locations = servers[i].getLocations();
         for (size_t j = 0; j < locations.size(); ++j)
+        {
             cout << "  - " << locations[j].getPath() << endl;
+            cout << "    allow_methods: ";
+            const set<string> &methods = locations[j].getAllowMethods();
+            for (set<string>::const_iterator it = methods.begin(); it != methods.end(); ++it)
+                cout << *it << " ";
+            cout << endl;
+            
+        }
     }
     cout << "----------------------------" << endl;
 }
