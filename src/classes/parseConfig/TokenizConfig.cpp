@@ -89,6 +89,24 @@ const vector <string> ParseConfig::tokenizeMethods(size_t &i)
 
     return methods;
 }
+const vector <string> ParseConfig::tokenizeIndex(size_t &i)
+{
+    vector<string> indexFiles;
+
+    while (i < _tokens.size())
+    {
+        const string &token = consumeToken(i);
+        if (token == ";")
+            break;
+        else if (token == "{" || token == "}")
+            throw invalid_argument("index: expected end with ';'");
+        indexFiles.push_back(token);
+    }
+    if (indexFiles.empty())
+        throw invalid_argument("index: no index files specified.");
+
+    return indexFiles;
+}
 
 const string &ParseConfig::consumeToken(size_t &i)
 {

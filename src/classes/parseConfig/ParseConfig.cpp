@@ -20,15 +20,24 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
 {
     LocationConf locationConf;
     locationConf.setPath(consumeToken(i));
-    bool needsSemicolon = true;
     if (consumeToken(i) != "{")
         throw invalid_argument("directive \"location\" has no opening \"{\"");
     while (i < _tokens.size())
     {
+        bool needsSemicolon = true;
         const string &currToken = consumeToken(i);
         if (currToken == "allow_methods")
         {
             locationConf.setAllowMethods(tokenizeMethods(i));
+            needsSemicolon = false;
+        }
+        else if (currToken == "root")
+            locationConf.setRoot(consumeToken(i));
+        else if (currToken == "autoindex")
+            locationConf.setAutoindex(consumeToken(i));
+        else if (currToken == "index")
+        {
+            locationConf.setIndex(tokenizeIndex(i));
             needsSemicolon = false;
         }
         else if (currToken == "}")
@@ -59,7 +68,10 @@ void ParseConfig::parseServer(Server &server, size_t &i)
         else if (currentToken == "root")
             server.setRoot(consumeToken(i));
         else if (currentToken == "index")
-            server.setIndex(consumeToken(i));
+        {
+            server.setIndex(tokenizeIndex(i));
+            needsSemicolon = false;
+        }
         else if (currentToken == "client_max_body_size")
             server.setClientMaxBodySize(consumeToken(i));
         else if (currentToken == "error_page"){
@@ -118,7 +130,12 @@ void ParseConfig::debug()
         for (size_t j = 0; j < listens.size(); j++)
             cout << "ip: " + listens[j].ip + ", port: " << listens[j].port << endl;
         cout << "Root: " << servers[i].getRoot() << endl;
-        cout << "index: " << servers[i].getIndex() << endl;
+        cout << "index: ";
+        for (size_t j = 0; j < servers[i].getIndex().size(); ++j)
+        {
+            cout << servers[i].getIndex()[j] << " ";
+        }
+        cout << endl;
         cout << "client max body size: " << servers[i].getClientMaxBodySize() << "B" << endl;
         string uri;
         cout << "error_page: ";
@@ -140,7 +157,14 @@ void ParseConfig::debug()
             for (set<string>::const_iterator it = methods.begin(); it != methods.end(); ++it)
                 cout << *it << " ";
             cout << endl;
+            cout << "    root: " << locations[j].getRoot() << endl;
             
+            cout << "    index: " ;
+            for (size_t k = 0; k < locations[j].getIndex().size(); ++k)
+            {
+                cout << locations[j].getIndex()[k] << " ";
+            }
+            cout << endl;
         }
     }
     cout << "----------------------------" << endl;

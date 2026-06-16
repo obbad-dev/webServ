@@ -26,7 +26,7 @@ class Server
     private:
         vector<Listen> listens;
         string _root;
-        string index;
+        vector<string> index;
         uint64_t client_max_body_size;
         bool has_set_client_max_body_size;
         map<int, string> errors_page;
@@ -38,14 +38,14 @@ class Server
 
         void setListen(const string& );
         void setRoot(const string& );
-        void setIndex(const string& );
+        void setIndex(const vector<string>& );
         void setClientMaxBodySize(const string& );
         void setErrorsPages(vector<string>& );
         void pushLocation(LocationConf& location);
 
         const vector<Listen> &getListens() const;
         const string &getRoot() const;
-        const string& getIndex() const;
+        const vector<string>& getIndex() const;
         const uint64_t& getClientMaxBodySize() const;
         const bool& hasSetClientMaxBodySize() const;
         const map<int, string>& getErrorsPages() const;

@@ -9,8 +9,9 @@
 #include <linux/limits.h>
 #include <climits>
 
-Server::Server() : _root(""), index("index.html"), client_max_body_size(1048576), has_set_client_max_body_size(false) 
+Server::Server() : _root(""), client_max_body_size(1048576), has_set_client_max_body_size(false) 
 {
+    index.push_back("index.html");
 }
 
 Server::~Server()
@@ -82,10 +83,10 @@ void Server::setRoot(const string &pathStr)
 
     this->_root = pathStr;
 }
-void Server::setIndex(const string& token){
-    if (token == ";")
+void Server::setIndex(const vector<string>& indexFiles){
+    if (indexFiles.empty())
         throw invalid_argument("The 'index' directive is Empty");
-    this->index = token;
+    this->index.insert(this->index.end(), indexFiles.begin(), indexFiles.end());
 }
 
 void Server::setClientMaxBodySize(const string &token)
@@ -157,7 +158,7 @@ const string &Server::getRoot() const
 {
     return this->_root;
 }
-const string &Server::getIndex() const{
+const vector<string> &Server::getIndex() const{
     return this->index;
 }
 const uint64_t &Server::getClientMaxBodySize() const
@@ -171,7 +172,6 @@ const bool& Server::hasSetClientMaxBodySize() const
 const map<int, string>& Server::getErrorsPages() const {
     return this->errors_page;
 }
-
 const vector<LocationConf> &Server::getLocations() const
 {
     return this->locations;

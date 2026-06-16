@@ -9,6 +9,9 @@ LocationConf::LocationConf()
     allowMethods.insert("POST");
     allowMethods.insert("DELETE");
     setAllowMethodsFlag = false;
+    autoindex = false;
+    hasIndexFlag = false;
+    setRootFlag = false;
 }
 
 LocationConf::~LocationConf()
@@ -39,7 +42,44 @@ void LocationConf::setAllowMethods(const vector<string> &tokens)
     }
     setAllowMethodsFlag = true;  
 }
+void LocationConf::setRoot(const string &rootPath)
+{
+    if (setRootFlag)
+        throw invalid_argument("root: duplicate directive in location block.");
+    if (rootPath == ";")
+        throw invalid_argument("root: empty root path.");
+    this->root = rootPath;
+    this->setRootFlag = true;
+}
+void LocationConf::setAutoindex(const string &token)
+{
+    if (autoindex)
+        throw invalid_argument("autoindex: duplicate directive in location block.");
+    if (token == ";")
+        throw invalid_argument("autoindex: empty value."); 
+    if (token == "on")
+        this->autoindex = true;
+    else if (token == "off")
+        this->autoindex = false;
+    else
+        throw invalid_argument("Invalid value for autoindex: '" + token + "'. Valid values are 'on' or 'off'.");
+}
+void LocationConf::setIndex(const vector<string> &indexFiles)
+{
+    if (indexFiles.empty())
+        throw invalid_argument("index: empty value.");
+    this->index.insert(this->index.end(), indexFiles.begin(), indexFiles.end());
+    this->hasIndexFlag = true;
+}
 
+const bool &LocationConf::hasAutoindex() const
+{
+    return this->autoindex;
+}
+const string &LocationConf::getRoot() const
+{
+    return this->root;
+}
 const set<string> &LocationConf::getAllowMethods() const
 {
     return this->allowMethods;
@@ -48,4 +88,12 @@ const set<string> &LocationConf::getAllowMethods() const
 const string &LocationConf::getPath() const
 {
     return this->path;
+}
+const vector<string> &LocationConf::getIndex() const
+{
+    return this->index;
+} 
+const bool &LocationConf::indexIsSet() const
+{
+    return hasIndexFlag;
 }
