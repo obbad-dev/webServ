@@ -11,7 +11,6 @@ ParseConfig::ParseConfig(std::string configFile) : _configFile(configFile)
     parse();
     debug();
 }
-
 ParseConfig::~ParseConfig()
 {
 }
@@ -40,6 +39,22 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
             locationConf.setIndex(tokenizeIndex(i));
             needsSemicolon = false;
         }
+        else if (currToken == "return")
+        {
+            string status = consumeToken(i);
+            string path = consumeToken(i);
+            locationConf.setReturn(path, status);
+        }
+        else if (currToken == "upload")
+            locationConf.setUpload(consumeToken(i));
+        else if (currToken == "enable_upload")
+            locationConf.setEnableUpload(consumeToken(i));
+        else if (currToken == "cgi_pass")
+        {
+            string extension = consumeToken(i);
+            string path = consumeToken(i);
+            locationConf.setCgiPass(extension, path);
+        }
         else if (currToken == "}")
             break;
         else
@@ -47,6 +62,8 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
         if (needsSemicolon && consumeToken(i) != ";")
             throw invalid_argument("Syntax error: too many values in directive " + currToken);
     }
+    if (locationConf.uploadEnabledStatus() && !locationConf.uploadIsSet())
+        throw invalid_argument("directive \"upload\": 'enable_upload' is set to 'on' but no upload path is specified.");
     server.pushLocation(locationConf);
 }
 
@@ -84,6 +101,8 @@ void ParseConfig::parseServer(Server &server, size_t &i)
             parseLocations(server, i);
             needsSemicolon = false;
         }
+        else if (currentToken == "server_name")
+            server.setServerName(consumeToken(i));
         else
             throw invalid_argument("Unsupported directive: '" + currentToken + "'.");
 
@@ -111,9 +130,17 @@ void ParseConfig::parse()
         else
             throw invalid_argument("Config file must start with [server], not " + currentToken + ".");
 
+        const vector<LocationConf> &locations = server.getLocations();
+        // for (size_t k = 0; k < locations.size(); ++k)
+        // {
+        //     if (!locations[k].rootIsSet())
+        //         locations[k].setRoot(server.getRoot());
+        //     if (!locations[k].indexIsSet())
+        //             locations[k].setIndex(server.getIndex());
+        // }
+        }
         servers.push_back(server);
     }
-}
 
 const vector<Server> &ParseConfig::getSrvers() const
 {
@@ -146,6 +173,7 @@ void ParseConfig::debug()
             cout << it->first << " ";
         }
         cout << uri << endl;
+        cout << "server name: " << servers[i].getServerName() << endl;
 
         cout << "Locations:" << endl;
         const vector<LocationConf> &locations = servers[i].getLocations();
@@ -165,7 +193,22 @@ void ParseConfig::debug()
                 cout << locations[j].getIndex()[k] << " ";
             }
             cout << endl;
+            cout << "    autoindex: " << (locations[j].hasAutoindex() ? "on" : "off") << endl;
+            if (locations[j].getReturn().first != 0)
+                cout << "    return: " << locations[j].getReturn().first << " " << locations[j].getReturn().second << endl;
+            cout << "    upload_enabled: " << (locations[j].uploadEnabledStatus() ? "on" : "off") << endl;
+            if (locations[j].uploadEnabledStatus())
+                cout << "    upload_path: " << locations[j].getUploadPath() << endl;
+
+            const map<string, string> &cgiPassMap = locations[j].getCgiPass();
+            if (!cgiPassMap.empty()){
+                for (map<string, string>::const_iterator it = cgiPassMap.begin(); it != cgiPassMap.end(); ++it)
+                {
+                    cout << "    cgi_pass: ";
+                    cout  << it->first << " => " << it->second << endl;
+                }  
+            }
         }
-    }
     cout << "----------------------------" << endl;
+}
 }

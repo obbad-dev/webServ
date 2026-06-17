@@ -31,6 +31,7 @@ class Server
         bool has_set_client_max_body_size;
         map<int, string> errors_page;
         vector<LocationConf> locations;
+        string server_name;
 
     public:
         Server();
@@ -42,7 +43,9 @@ class Server
         void setClientMaxBodySize(const string& );
         void setErrorsPages(vector<string>& );
         void pushLocation(LocationConf& location);
+        void setServerName(const string& name);
 
+        const string &getServerName() const;
         const vector<Listen> &getListens() const;
         const string &getRoot() const;
         const vector<string>& getIndex() const;

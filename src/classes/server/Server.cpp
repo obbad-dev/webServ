@@ -148,6 +148,14 @@ void Server::setErrorsPages(vector<string>& errorTokens)
 void Server::pushLocation(LocationConf& location){
     locations.push_back(location);
 }
+void Server::setServerName(const string& name){
+    if (name == ";")
+        throw invalid_argument("The 'server_name' directive is Empty");
+    this->server_name = name;
+}
+const string &Server::getServerName() const{
+    return this->server_name;
+}
 
 
 const vector<Listen> &Server::getListens() const

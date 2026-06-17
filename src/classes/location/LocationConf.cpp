@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 #include <algorithm>
+#include <cstdlib>
+#include <cerrno>
 
 LocationConf::LocationConf()
 {
@@ -12,6 +14,9 @@ LocationConf::LocationConf()
     autoindex = false;
     hasIndexFlag = false;
     setRootFlag = false;
+    hasReturnFlag = false;
+    uploadEnabled = false;
+    hasUploadFlag = false;
 }
 
 LocationConf::~LocationConf()
@@ -70,6 +75,79 @@ void LocationConf::setIndex(const vector<string> &indexFiles)
         throw invalid_argument("index: empty value.");
     this->index.insert(this->index.end(), indexFiles.begin(), indexFiles.end());
     this->hasIndexFlag = true;
+}
+void LocationConf::setReturn(const string &path, const string &status)
+{
+    if (hasReturnFlag)
+        throw invalid_argument("return: duplicate directive in location block.");
+    if (path == ";" || status == ";" )
+        throw invalid_argument("directive \"return\" has empty value.");
+
+    char *endptr;
+    errno = 0;
+    long statusCode = strtol(status.c_str(), &endptr, 10);
+    if (*endptr != '\0' || errno == ERANGE)
+        throw invalid_argument("directive \"return\" has invalid status code.");
+    if (statusCode !=301 && statusCode != 302)
+        throw invalid_argument("directive \"return\" has invalid status code must be 301 or 302.");
+    this->returnPair = make_pair(statusCode, path);
+    hasReturnFlag = true;
+}
+void LocationConf::setUpload(const string &path)
+{
+    if (hasUploadFlag)
+        throw invalid_argument("upload: duplicate directive in location block.");
+    if (path == ";")
+        throw invalid_argument("directive \"upload\" has empty value.");
+    this->uploadPath = path;
+    hasUploadFlag = true;
+}
+void LocationConf::setEnableUpload(const string &token)
+{
+    if (token == ";")
+        throw invalid_argument("directive \"upload\" has empty value.");
+    if (token == "on")
+        this->uploadEnabled = true;
+    else if (token == "off")
+        this->uploadEnabled = false;
+    else
+        throw invalid_argument("Invalid value for upload: '" + token + "'. Valid values are 'on' or 'off'.");
+}
+void LocationConf::setCgiPass(const std::string &extension, const std::string &path)
+{
+    if (extension == ";" || path == ";")
+        throw std::invalid_argument("directive \"cgi_pass\" has empty value.");
+
+    if (extension[0] != '.')
+        throw std::invalid_argument("cgi_pass: extension must start with '.' (e.g. '.php')");
+
+    if (cgiPass.find(extension) != cgiPass.end())
+        throw std::invalid_argument("cgi_pass: duplicate directive for extension " + extension);
+
+    cgiPass[extension] = path;
+}
+
+const map<string, string> &LocationConf::getCgiPass() const
+{
+    return this->cgiPass;
+}
+
+const bool &LocationConf::uploadEnabledStatus() const
+{
+    return this->uploadEnabled;
+}
+const string &LocationConf::getUploadPath() const
+{    return this->uploadPath;
+}
+const bool &LocationConf::uploadIsSet() const
+{    return hasUploadFlag;
+}
+const pair<int, string> &LocationConf::getReturn() const
+{
+    return this->returnPair;
+}
+const bool &LocationConf::hasReturn() const
+{    return hasReturnFlag;
 }
 
 const bool &LocationConf::hasAutoindex() const
