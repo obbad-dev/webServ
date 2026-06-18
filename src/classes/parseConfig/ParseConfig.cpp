@@ -4,6 +4,7 @@
 #include <sstream>
 #include <stack>
 #include <stdexcept>
+#include <algorithm>
 
 ParseConfig::ParseConfig(std::string configFile) : _configFile(configFile)
 {
@@ -64,6 +65,8 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
     }
     if (locationConf.uploadEnabledStatus() && !locationConf.uploadIsSet())
         throw invalid_argument("directive \"upload\": 'enable_upload' is set to 'on' but no upload path is specified.");
+    if (find(server.getLocations().begin(), server.getLocations().end(), locationConf) != server.getLocations().end())
+        throw invalid_argument("duplicate location block for path: " + locationConf.getPath());
     server.pushLocation(locationConf);
 }
 
@@ -130,17 +133,17 @@ void ParseConfig::parse()
         else
             throw invalid_argument("Config file must start with [server], not " + currentToken + ".");
 
-        const vector<LocationConf> &locations = server.getLocations();
-        // for (size_t k = 0; k < locations.size(); ++k)
-        // {
-        //     if (!locations[k].rootIsSet())
-        //         locations[k].setRoot(server.getRoot());
-        //     if (!locations[k].indexIsSet())
-        //             locations[k].setIndex(server.getIndex());
-        // }
+        vector<LocationConf> &locations = server.getLocations();
+        for (size_t k = 0; k < locations.size(); ++k)
+        {
+            if (!locations[k].rootIsSet())
+                locations[k].setRoot(server.getRoot());
+            if (!locations[k].indexIsSet())
+                locations[k].setIndex(server.getIndex());
         }
         servers.push_back(server);
     }
+}
 
 const vector<Server> &ParseConfig::getSrvers() const
 {

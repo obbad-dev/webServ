@@ -175,3 +175,13 @@ const bool &LocationConf::indexIsSet() const
 {
     return hasIndexFlag;
 }
+const bool &LocationConf::rootIsSet() const
+{
+    return setRootFlag;
+}
+
+
+bool LocationConf::operator==(const LocationConf &other) const
+{
+    return (this->path == other.path);
+}

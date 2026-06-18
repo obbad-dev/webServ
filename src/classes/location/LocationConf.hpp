@@ -52,4 +52,5 @@ public:
     const string &getUploadPath() const;
     const bool &uploadIsSet() const;
     const map<string, string> &getCgiPass() const;
+    bool operator==(const LocationConf &other) const;
 };
