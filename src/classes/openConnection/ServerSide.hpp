@@ -17,6 +17,6 @@ public:
     ServerSide(ParseConfig &config);
     ~ServerSide();
 
-    void setup();
+    int setup();
 };
 
