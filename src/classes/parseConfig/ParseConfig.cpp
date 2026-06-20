@@ -155,7 +155,7 @@ void ParseConfig::debug()
     cout << "--- Parsed Configuration ---" << endl;
     for (size_t i = 0; i < servers.size(); ++i)
     {
-        cout << "Server [" << i << "]:" << endl;
+        cout << "Server [" << i << "]:   ";
         const vector<Listen> &listens = servers[i].getListens();
         for (size_t j = 0; j < listens.size(); j++)
             cout << "ip: " + listens[j].ip + ", port: " << listens[j].port << endl;

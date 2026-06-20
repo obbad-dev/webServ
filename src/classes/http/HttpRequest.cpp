@@ -3,6 +3,8 @@
 #include <cstring>
 #include <sys/socket.h>
 #include <sstream>
+#include <iostream>
+#include <fstream>
 #include <cstdio>
 
 
@@ -49,7 +51,7 @@ void HttpRequest::setProtocolVersion(string version)
 // parse request
 void HttpRequest::parseRequest(int& clientFd){
     string request = readRequest(clientFd);
-    
+    // std::cout << request << std::endl;
     if (request.find("\r\n\r\n") == std::string::npos)
         throw std::runtime_error("Incomplete HTTP request");
 
@@ -80,7 +82,7 @@ void HttpRequest::parseRequest(int& clientFd){
             if (iss >> extra)
                 throw std::runtime_error("Too many fields in request line");
 
-            setMethod(method);
+            setMethod(method); // why setters when you can set them directly
             setTarget(target);
             setProtocolVersion(version);
             requestLineParsed = true;
@@ -117,8 +119,7 @@ string HttpRequest::readRequest(int& clientFd){
     while (req.find("\r\n\r\n") == string::npos)
     {
         memset(buffer, 0, sizeof(buffer));
-        ssize_t byteRead = recv(clientFd, buffer, sizeof(buffer), 0);
-
+        ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
         if (byteRead < 0)
         {
             perror("Error");
@@ -126,10 +127,98 @@ string HttpRequest::readRequest(int& clientFd){
         }
         req.append(buffer, static_cast<size_t>(byteRead));
     }
-
-    //POST PUT: not handle it
-    
-
     return req;
 }
 
+bool read_content(string &content, string &path)
+{
+    ifstream file(path.c_str());
+    if (!file.is_open())
+        return false;
+
+    string tmp_content;
+    while (1)
+    {
+        getline(file, tmp_content);
+        content += tmp_content;
+        if (file.eof())
+            break;
+        content += "\n";
+    }
+    return true;
+}
+
+string conv_to_str(int number)
+{
+    ostringstream s;
+    s << number;
+    return s.str();
+}
+
+string retrieve_extension(map<string, string> &extensions, string &path)
+{
+    string substring;
+    size_t pos = path.rfind(".");
+    if (pos != string::npos)
+        substring = path.substr(pos);
+    else
+        return "text/plain";
+
+    map<string, string>::iterator it = extensions.find(substring);
+    if (it != extensions.end())
+        return it->second;
+    else
+        return "text/plain";
+}
+
+void HttpRequest::create_response(int &clientFd)
+{
+    string response;
+    if (method == "GET")
+    {
+        string path;
+        if (target == "/")
+            path = "./resources/sites/index.html";
+        else
+            path = "./resources/sites" + target;
+
+        string content;
+        if (read_content(content, path))
+        {
+            response += "HTTP/1.1 200 OK\r\n";
+            response += "Content-Type: ";
+            response += retrieve_extension(extensions, path);
+            response += "\r\n";
+            response += "Content-Length: ";
+            response += conv_to_str(content.size());
+            response += "\r\n";
+            response += "\r\n";
+            response += content;
+        }
+        else
+        {
+            response += "HTTP/1.1 404 Not Found\r\n";
+            response += "Content-Type: text/plain\r\n";
+            response += "Content-Length: 9\r\n";
+            response += "\r\n";
+            response += "Not Found";
+        }
+        if (send(clientFd, response.c_str(), response.size(), 0) == -1)
+        {
+            perror("send");
+            return;
+        }
+    }
+    // else if (method == "POST")
+    // {
+
+    // }
+    // else if (method = "DELETE")
+    // {
+
+    // }
+    // else
+    // {
+    //     // send ERROR;
+    // }
+}

@@ -29,60 +29,53 @@ void ServerSide::debug()
         cout << it->first << ": " << it->second << '\n';
 }
 
-void ServerSide::setup()
+void prepare_extensions_map(map<string, string> &extensions)
 {
-    // const Server &server = _config.getSrvers()[0];
-    int serverFd = socket(AF_INET, SOCK_STREAM, 0);
+    extensions[".html"] = "text/html";
+    extensions[".css"] = "text/css";
+    extensions[".js"] = "application/javascript";
+    extensions[".jpg"] = "image/jpeg";
+    extensions[".jpeg"] = "image/jpeg";
+    extensions[".png"] = "image/png";
+    extensions[".gif"] = "image/gif";
+    extensions[".ico"] = "image/x-icon";
+    extensions[".txt"] = "text/plain";
+    extensions[".pdf"] = "application/pdf";
+}
 
-    if (serverFd < 1)
-    {
-        perror("socket");
-        throw runtime_error("");
-    }
+int ServerSide::setup()
+{
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+        return (perror("socket"), 1);
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(8080);
+    struct sockaddr_in s_addr, c_addr;
+    bzero(&s_addr, sizeof(s_addr));
+    s_addr.sin_family = AF_INET;
+    s_addr.sin_port = htons(8080);
+    s_addr.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(serverFd, reinterpret_cast<struct sockaddr *>(&addr), sizeof(addr)) < 0)
-    {
-        perror("bind");
-        throw runtime_error("");
-    }
+    if (bind(sockfd, reinterpret_cast<sockaddr*>(&s_addr), sizeof(s_addr)) == -1)
+        return (perror("bind"), close(sockfd), 1);
 
-    if (listen(serverFd, 10))
-    {
-        perror("listen");
-        throw runtime_error("");
-    }
+    if (listen(sockfd, 5) == -1)
+        return (perror("listen"), close(sockfd), 1);
 
-    struct sockaddr_in clientAddr;
-    socklen_t clientLen = sizeof(clientAddr);
+    socklen_t c_len = sizeof(c_addr);
+
+    prepare_extensions_map(httpRequest.extensions);
+
     while (1)
     {
-        int clientFd = accept(serverFd, reinterpret_cast<struct sockaddr *>(&clientAddr), &clientLen);
-        if (clientFd < 0)
-        {
-            perror("accept");
-            throw runtime_error("");
-        }
-    
-        httpRequest.parseRequest(clientFd);
-        debug();
-    
-        std::string response =
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Length: 13\r\n" // <-- Added \r\n here
-            "Content-Type: text/plain\r\n"
-            "\r\n" // End of headers blank line
-            "Hello, World!";
-    
-        send(clientFd, response.c_str(), response.length(), 0);
-    
-        // Warning: Be careful with closing serverFd here if you are in a loop!
-        close(clientFd);
+        int client_fd = accept(sockfd, reinterpret_cast<sockaddr*>(&c_addr), &c_len);
+        if (client_fd == -1)
+            return(perror("accept"), close(sockfd), 1);
+
+        httpRequest.parseRequest(client_fd);
+
+        httpRequest.create_response(client_fd);
+
+        close(client_fd);
     }
-    close(serverFd);
+    close(sockfd);
 }
