@@ -9,12 +9,12 @@ using namespace std;
 class ServerSide
 {
 private:
-    ParseConfig &_config;
+    const vector<Server> &servers;
     HttpRequest httpRequest;
     void debug();
 
 public:
-    ServerSide(ParseConfig &config);
+    ServerSide(const vector<Server> &servers);
     ~ServerSide();
 
     int setup();

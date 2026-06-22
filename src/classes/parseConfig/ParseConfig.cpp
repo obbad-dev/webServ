@@ -10,7 +10,7 @@ ParseConfig::ParseConfig(std::string configFile) : _configFile(configFile)
 {
     tokenize();
     parse();
-    debug();
+    cout << "Configuration file parsed successfully." << endl;
 }
 ParseConfig::~ParseConfig()
 {
@@ -145,7 +145,7 @@ void ParseConfig::parse()
     }
 }
 
-const vector<Server> &ParseConfig::getSrvers() const
+const vector<Server> &ParseConfig::getServers() const
 {
     return servers;
 }

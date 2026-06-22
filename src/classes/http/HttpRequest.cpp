@@ -6,7 +6,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdio>
-
+#include <algorithm>
 
 HttpRequest::HttpRequest(): method(""), target("") {}
 HttpRequest::~HttpRequest() {}
@@ -30,8 +30,10 @@ void HttpRequest::setHeaders(string key, string value){
     {
         value.erase(0, 1);
     }
+    transform(key.begin(), key.end(), key.begin(), ::tolower);
     headers[key] = value;
 }
+
 void HttpRequest::setMethod(string method){
     if (method != "GET")
         throw std::runtime_error("Unsupported method");
@@ -46,12 +48,13 @@ void HttpRequest::setProtocolVersion(string version)
         throw std::runtime_error("Unsupported HTTP version");
     protocolVersion = version;
 }
-
+void HttpRequest::setBodyContent(string& body){
+    this->bodyContent = body;
+}
 
 // parse request
 void HttpRequest::parseRequest(int& clientFd){
     string request = readRequest(clientFd);
-    // std::cout << request << std::endl;
     if (request.find("\r\n\r\n") == std::string::npos)
         throw std::runtime_error("Incomplete HTTP request");
 
@@ -82,7 +85,7 @@ void HttpRequest::parseRequest(int& clientFd){
             if (iss >> extra)
                 throw std::runtime_error("Too many fields in request line");
 
-            setMethod(method); // why setters when you can set them directly
+            setMethod(method);
             setTarget(target);
             setProtocolVersion(version);
             requestLineParsed = true;
@@ -104,13 +107,47 @@ void HttpRequest::parseRequest(int& clientFd){
         start = end + 2;
     }
 
-    if (getProtocolVersion() == "HTTP/1.1" && headers["Host"] == "")
+    if (getProtocolVersion() == "HTTP/1.1" && headers["host"] == "")
     {
         throw std::runtime_error("Missing Host header");
     }
-    // debug();
+    if(headers["content-length"] != "" ){
+        parseBody(clientFd, request);
+    }
+    debug();
+}
+// void read_content(int &clientFd, string &content, long contentLength)
+// {
+// }
+void HttpRequest::parseBody(int &clientFd, string& request)
+{
+    char *endPtr;
+    errno = 0;
+    long contentLength = strtol(headers["content-length"].c_str(), &endPtr, 10);
+    if (*endPtr != '\0' || errno == ERANGE || contentLength < 0)
+        throw std::runtime_error("Invalid Content-Length header");
+    char buffer[contentLength + 1];
+    memset(buffer, 0, sizeof(buffer));
+    if (recv(clientFd, buffer, contentLength, 0) == -1)
+        throw std::runtime_error("Error reading request body");
+    // TODO: Handle the case where the body is not fully received in one recv call
+    if (static_cast<long>(body.size()) < contentLength)
+        throw std::runtime_error("Incomplete request body");
+    setBodyContent(body);
 }
 
+void HttpRequest::debug()
+{
+    cout << "Method: " << this->method << '\n';
+    cout << "Target: " << this->target << '\n';
+    cout << "Protocol: " << this->protocolVersion << '\n';
+    cout << "------------Headers-----------" << '\n';
+    for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+        cout << it->first << ": " << it->second << '\n';
+    cout << "------------Body-----------" << '\n';
+    cout << this->bodyContent << '\n';
+    cout << "------------------------------------" << '\n';
+}
 // parse request
 string HttpRequest::readRequest(int& clientFd){
     string req;

@@ -29,5 +29,5 @@ public:
     void tokenize();
     void parse();
     void debug();
-    const vector<Server> &getSrvers() const;
+    const vector<Server> &getServers() const;
 };

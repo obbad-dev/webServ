@@ -8,8 +8,8 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
-
-ServerSide::ServerSide(ParseConfig &config) : _config(config)
+#include <arpa/inet.h>
+ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
 
@@ -45,6 +45,7 @@ void prepare_extensions_map(map<string, string> &extensions)
 
 int ServerSide::setup()
 {
+    Server server = servers[0];
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1)
         return (perror("socket"), 1);
@@ -52,8 +53,8 @@ int ServerSide::setup()
     struct sockaddr_in s_addr, c_addr;
     bzero(&s_addr, sizeof(s_addr));
     s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons(8080);
-    s_addr.sin_addr.s_addr = INADDR_ANY;
+    s_addr.sin_port = htons(server.getListens()[0].port);
+    s_addr.sin_addr.s_addr = inet_addr(server.getListens()[0].ip.c_str());
 
     if (bind(sockfd, reinterpret_cast<sockaddr*>(&s_addr), sizeof(s_addr)) == -1)
         return (perror("bind"), close(sockfd), 1);
@@ -78,4 +79,5 @@ int ServerSide::setup()
         close(client_fd);
     }
     close(sockfd);
+    return 0;
 }
