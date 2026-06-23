@@ -13,6 +13,7 @@ private:
     map<string, string> headers;
     string readRequest(int &clientFd);
     void parseBody(int &clientFd, string& request);
+    void parseChunkedBody(int &clientFd, string& request);
     void debug();
 
 public:

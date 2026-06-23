@@ -35,7 +35,7 @@ void HttpRequest::setHeaders(string key, string value){
 }
 
 void HttpRequest::setMethod(string method){
-    if (method != "GET")
+    if (method != "GET" && method != "POST" && method != "DELETE")
         throw std::runtime_error("Unsupported method");
     this->method = method;
 }
@@ -81,10 +81,8 @@ void HttpRequest::parseRequest(int& clientFd){
 
             if (!(iss >> method >> target >> version))
                 throw std::runtime_error("Invalid request line");
-
             if (iss >> extra)
                 throw std::runtime_error("Too many fields in request line");
-
             setMethod(method);
             setTarget(target);
             setProtocolVersion(version);
@@ -111,14 +109,63 @@ void HttpRequest::parseRequest(int& clientFd){
     {
         throw std::runtime_error("Missing Host header");
     }
-    if(headers["content-length"] != "" ){
+    if (!headers["transfer-encoding"].empty())
+    {
+        string value = headers["transfer-encoding"];
+        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+        if (value == "chunked")
+           parseChunkedBody(clientFd, request);
+        else 
+            throw std::runtime_error("Unsupported Transfer-Encoding: " + value);
+    }
+    else if(!headers["content-length"].empty()){
         parseBody(clientFd, request);
     }
     debug();
 }
-// void read_content(int &clientFd, string &content, long contentLength)
-// {
-// }
+
+void HttpRequest::parseChunkedBody(int &clientFd, string& request)
+{
+    string body;
+    size_t pos = request.find("\r\n\r\n");
+    request = request.substr(pos + 4);
+
+    while (true)
+    {
+        if (request.find("\r\n0\r\n\r\n")  == string::npos)
+        {
+            char buffer[4096];
+            memset(buffer, 0, sizeof(buffer));
+            ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
+            if (byteRead <= 0)
+            {
+                perror("Error");
+                throw std::runtime_error("Error reading request body");
+            }
+            request.append(buffer, static_cast<size_t>(byteRead));
+        }
+        size_t chunkSizeEnd = request.find("\r\n");
+        if (chunkSizeEnd == string::npos)
+            throw std::runtime_error("Invalid chunked body format");
+
+        string chunkSizeStr = request.substr(0, chunkSizeEnd);
+        char *end;
+        errno = 0;
+        long chunkSize = strtol(chunkSizeStr.c_str(), &end, 16);
+        if (*end != '\0' || errno == ERANGE || chunkSize < 0)
+            throw std::runtime_error("Invalid chunk size: " + chunkSizeStr);
+        if (chunkSize == 0)
+            break;
+        size_t chunkStart = chunkSizeEnd + 2;
+        string chunckData = request.substr(chunkStart, chunkSize);
+        if (chunckData.find("\r\n") != string::npos)
+            throw runtime_error("body chunck error");
+        body.append(chunckData);
+        request.erase(0, chunkSizeEnd + chunkSize + 2);
+    }
+    setBodyContent(body);
+}
+
 void HttpRequest::parseBody(int &clientFd, string& request)
 {
     char *endPtr;
@@ -126,13 +173,26 @@ void HttpRequest::parseBody(int &clientFd, string& request)
     long contentLength = strtol(headers["content-length"].c_str(), &endPtr, 10);
     if (*endPtr != '\0' || errno == ERANGE || contentLength < 0)
         throw std::runtime_error("Invalid Content-Length header");
-    char buffer[contentLength + 1];
-    memset(buffer, 0, sizeof(buffer));
-    if (recv(clientFd, buffer, contentLength, 0) == -1)
-        throw std::runtime_error("Error reading request body");
-    // TODO: Handle the case where the body is not fully received in one recv call
+    string body;
+    body = request.substr(request.find("\r\n\r\n") + 4);
     if (static_cast<long>(body.size()) < contentLength)
-        throw std::runtime_error("Incomplete request body");
+    {
+        while (static_cast<long>(body.size()) < contentLength)
+        {
+            char buffer[4096];
+            memset(buffer, 0, sizeof(buffer));
+            ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
+            if (byteRead <= 0)
+            {
+                perror("Error");
+                throw std::runtime_error("Error reading request body");
+            }
+            body.append(buffer, static_cast<size_t>(byteRead));
+        }
+    }
+    if (static_cast<long>(body.size()) > contentLength)
+        body.resize(contentLength);
+
     setBodyContent(body);
 }
 
@@ -148,6 +208,7 @@ void HttpRequest::debug()
     cout << this->bodyContent << '\n';
     cout << "------------------------------------" << '\n';
 }
+
 // parse request
 string HttpRequest::readRequest(int& clientFd){
     string req;
