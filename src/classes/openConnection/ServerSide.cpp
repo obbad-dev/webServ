@@ -8,6 +8,9 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#include <arpa/inet.h> 
+
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
@@ -17,16 +20,16 @@ ServerSide::~ServerSide()
 }
 
 
-void ServerSide::debug()
-{
-    cout << "Method: " << this->httpRequest.getMethod() << '\n';
-    cout << "Target: " << this->httpRequest.getPath() << '\n';
-    cout << "Protocol: " << this->httpRequest.getProtocolVersion() << '\n';
-    cout << "------------Headers-----------" << '\n';
-    const map<string, string> &headers = this->httpRequest.getHeaders();
-    for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
-        cout << it->first << ": " << it->second << '\n';
-}
+// void ServerSide::debug()
+// {
+//     cout << "Method: " << this->httpRequest.getMethod() << '\n';
+//     cout << "Target: " << this->httpRequest.getPath() << '\n';
+//     cout << "Protocol: " << this->httpRequest.getProtocolVersion() << '\n';
+//     cout << "------------Headers-----------" << '\n';
+//     const map<string, string> &headers = this->httpRequest.getHeaders();
+//     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+//         cout << it->first << ": " << it->second << '\n';
+// }
 
 void prepare_extensions_map(map<string, string> &extensions)
 {
@@ -42,7 +45,6 @@ void prepare_extensions_map(map<string, string> &extensions)
     extensions[".pdf"] = "application/pdf";
 }
 
-#include <arpa/inet.h> // to be removed with inet_addr
 
 void ServerSide::create_server_sock()
 {
@@ -120,23 +122,14 @@ void ServerSide::communication_part()
                         throw runtime_error("Accept failed");
 
                     add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
-
                     fds[clientfd] = "Client";
                 }
                 else
                 {
-                    if (event_arr->events == EPOLLIN)
+                    if (event_arr[i].events == EPOLLIN)
                     {
-                        httpRequest.parseRequest(event_arr[i].data.fd);
-                        httpRequest.create_response(event_arr[i].data.fd);
+                        httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
                     }
-
-                    //     recv;
-                    // }
-                    // else
-                    // {
-                    //     send;
-                    // }
                 }
             }
         }
@@ -147,7 +140,12 @@ void ServerSide::setup()
 {
     create_server_sock();
 
-    prepare_extensions_map(httpRequest.extensions);
+    // prepare_extensions_map(httpRequest.extensions);
 
     communication_part();
 }
+
+
+
+
+

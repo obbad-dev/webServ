@@ -8,7 +8,10 @@
 #include <cstdio>
 #include <algorithm>
 
-HttpRequest::HttpRequest(): method(""), target("") {}
+HttpRequest::HttpRequest(): method(""), target("") {
+    headers_parsed = false;
+
+}
 HttpRequest::~HttpRequest() {}
 
 const map<string, string>& HttpRequest::getHeaders() const
@@ -51,77 +54,70 @@ void HttpRequest::setBodyContent(string& body){
     this->bodyContent = body;
 }
 
+//read Request
+string HttpRequest::readRequest(int& clientFd)
+{
+    char buffer[4096];
+    errno = 0;
+    memset(buffer, 0, sizeof(buffer));
+    ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
+    if (byteRead < 0)
+    {
+        if (errno != EAGAIN && errno != EWOULDBLOCK ){
+            perror("Error");
+            throw runtime_error("");
+        }
+    }
+    return buffer;
+}
+
 // parse request
 void HttpRequest::parseRequest(int clientFd){
-    string request = readRequest(clientFd);
-    if (request.find("\r\n\r\n") == std::string::npos)
-        throw std::runtime_error("Incomplete HTTP request");
+    // TODO: Step 1: Read incrementally from clientFd
+    raw_buffer.append(readRequest(clientFd));
 
-    size_t start = 0;
-    size_t end;
-
-    bool requestLineParsed = false;
-
-    while ((end = request.find("\r\n", start)) != std::string::npos)
+    // TODO: Step 2: Parse headers if not already done
+    if (!headers_parsed)
     {
-        std::string line = request.substr(start, end - start);
-
-        if (line.empty())
-            break;
-
-        if (!requestLineParsed)
-        {
-            std::istringstream iss(line);
-
-            std::string method;
-            std::string target;
-            std::string version;
-            std::string extra;
-
-            if (!(iss >> method >> target >> version))
-                throw std::runtime_error("Invalid request line");
-            if (iss >> extra)
-                throw std::runtime_error("Too many fields in request line");
-            setMethod(method);
-            setTarget(target);
-            setProtocolVersion(version);
-            requestLineParsed = true;
-
+        size_t end_headers = raw_buffer.find("\r\n\r\n");
+        if (end_headers == string::npos){
+            return;
         }
-        else
-        {
-            size_t pos = line.find(':');
-
-            if (pos == std::string::npos)
-                throw std::runtime_error("Invalid header: " + line);
-
-            if (pos == 0)
-                throw std::runtime_error("Empty header name");
-
-            std::string key = line.substr(0, pos);
-            std::string value = line.substr(pos + 1);
-            setHeaders(key, value);
-        }
-        start = end + 2;
+        
     }
 
-    if (getProtocolVersion() == "HTTP/1.1" && headers["host"] == "")
-    {
-        throw std::runtime_error("Missing Host header");
-    }
-    // if (!headers["transfer-encoding"].empty())
-    // {
-    //     string value = headers["transfer-encoding"];
-    //     std::transform(value.begin(), value.end(), value.begin(), ::tolower);
-    //     if (value == "chunked")
-    //        parseChunkedBody(clientFd, request);
-    //     else 
-    //         throw std::runtime_error("Unsupported Transfer-Encoding: " + value);
+
+
+
+
+
+
+
+
+
+
+    // if (!headers_parsed) {
+    //     1. Find "\r\n\r\n" in `raw_buffer`.
+    //     2. If not found: return.
+    //     3. Extract substring up to "\r\n\r\n" and parse request line and headers (you can adapt your original parsing logic here).
+    //     4. Erase the parsed header portion and "\r\n\r\n" from `raw_buffer`.
+    //     5. Set `headers_parsed = true`.
+    //     6. Inspect headers to set `body_type`:
+    //         - If "transfer-encoding" header is "chunked":
+    //               body_type = CHUNKED; chunk_state = READ_SIZE;
+    //         - Else if "content-length" header is present:
+    //               body_type = CONTENT_LENGTH; parse content_length;
+    //         - Else:
+    //               body_type = NONE; is_complete = true; return;
     // }
-    if(!headers["content-length"].empty()){
-        parseBody(clientFd, request);
-    }
-    debug();
+
+    // TODO: Step 3: Parse body if headers are parsed but request is not complete
+    // if (headers_parsed && !is_complete) {
+    //     if (body_type == CONTENT_LENGTH) {
+    //     } 
+    //     else if (body_type == CHUNKED) {
+    //     }
+    // }
 }
 
 // void HttpRequest::parseChunkedBody(int &clientFd, string& request)
@@ -211,23 +207,7 @@ void HttpRequest::debug()
 }
 
 // parse request
-string HttpRequest::readRequest(int& clientFd){
-    string req;
-    char buffer[4096];
 
-    while (req.find("\r\n\r\n") == string::npos)
-    {
-        memset(buffer, 0, sizeof(buffer));
-        ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
-        if (byteRead < 0)
-        {
-            perror("Error");
-            throw runtime_error("");
-        }
-        req.append(buffer, static_cast<size_t>(byteRead));
-    }
-    return req;
-}
 
 bool read_content(string &content, string &path)
 {
