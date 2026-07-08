@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-ServerSide::ServerSide(ParseConfig &config) : _config(config)
+ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
 
@@ -43,39 +43,112 @@ void prepare_extensions_map(map<string, string> &extensions)
     extensions[".pdf"] = "application/pdf";
 }
 
-int ServerSide::setup()
+#include <arpa/inet.h> // to be removed with inet_addr
+
+void ServerSide::create_server_sock()
 {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1)
-        return (perror("socket"), 1);
+    for (size_t i = 0; i < servers.size(); i++)
+    {
+        const vector<Listen> &tmp_listen = servers[i].getListens();
 
-    struct sockaddr_in s_addr, c_addr;
-    bzero(&s_addr, sizeof(s_addr));
-    s_addr.sin_family = AF_INET;
-    s_addr.sin_port = htons(8080);
-    s_addr.sin_addr.s_addr = INADDR_ANY;
+        for (size_t j = 0; j < tmp_listen.size(); j++)
+        {
+            int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+            if (sockfd == -1)
+                throw runtime_error("Socket failed to open"); // close previous files when error occurs
 
-    if (bind(sockfd, reinterpret_cast<sockaddr*>(&s_addr), sizeof(s_addr)) == -1)
-        return (perror("bind"), close(sockfd), 1);
+            int opt = 1;
+            if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
+                throw runtime_error("Setsockopt failed");
 
-    if (listen(sockfd, 5) == -1)
-        return (perror("listen"), close(sockfd), 1);
+            struct sockaddr_in s_addr;
+            bzero(&s_addr, sizeof(s_addr)); // replace with our bzero
+            s_addr.sin_family = AF_INET;
+            s_addr.sin_port = htons(tmp_listen[j].port);
+            s_addr.sin_addr.s_addr = inet_addr(tmp_listen[j].ip.c_str()); // inet_addr not allowed
 
-    socklen_t c_len = sizeof(c_addr);
+            if (bind(sockfd, reinterpret_cast<sockaddr*>(&s_addr), sizeof(s_addr)) == -1)
+                throw runtime_error("Bind failed"); // close previous files when error occurs
 
-    prepare_extensions_map(httpRequest.extensions);
+            if (listen(sockfd, 5) == -1)
+                throw runtime_error("listen failed"); // close previous files when error occurs
+
+            fds[sockfd] = "Server";
+        }
+    }
+}
+
+void add_fd_to_epoll(int epoll_fd, int fd, uint32_t events)
+{
+    struct epoll_event ev;
+
+    ev.events = events;
+    ev.data.fd = fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1)
+        throw runtime_error("Epoll ctl failed");
+}
+
+void ServerSide::communication_part()
+{
+    int epoll_fd = epoll_create(1);
+
+    if (epoll_fd == -1)
+        throw runtime_error("Epoll creation failed");
+
+    for (map<int, string>::iterator it = fds.begin(); it != fds.end(); it++)
+    {
+        add_fd_to_epoll(epoll_fd, it->first, EPOLLIN);
+    }
+
+    struct epoll_event event_arr[1024];
 
     while (1)
     {
-        int client_fd = accept(sockfd, reinterpret_cast<sockaddr*>(&c_addr), &c_len);
-        if (client_fd == -1)
-            return(perror("accept"), close(sockfd), 1);
+        int epoll_ready = epoll_wait(epoll_fd, event_arr, 1024, 1000);
 
-        httpRequest.parseRequest(client_fd);
+        if (epoll_ready == -1)
+            throw runtime_error("Epoll wait failed");
+        else if (epoll_ready > 0)
+        {
+            for (int i = 0; i < epoll_ready; i++)
+            {
+                map<int, string>::iterator it = fds.find(event_arr[i].data.fd);
 
-        httpRequest.create_response(client_fd);
+                if (it->second == "Server")
+                {
+                    int clientfd = accept(it->first, NULL, NULL);
+                    if (clientfd == -1)
+                        throw runtime_error("Accept failed");
 
-        close(client_fd);
+                    add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
+
+                    fds[clientfd] = "Client";
+                }
+                else
+                {
+                    if (event_arr->events == EPOLLIN)
+                    {
+                        httpRequest.parseRequest(event_arr[i].data.fd);
+                        httpRequest.create_response(event_arr[i].data.fd);
+                    }
+
+                    //     recv;
+                    // }
+                    // else
+                    // {
+                    //     send;
+                    // }
+                }
+            }
+        }
     }
-    close(sockfd);
+}
+
+void ServerSide::setup()
+{
+    ServerSide::create_server_sock();
+
+    prepare_extensions_map(httpRequest.extensions);
+
+    ServerSide::communication_part();
 }

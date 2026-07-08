@@ -49,7 +49,7 @@ void HttpRequest::setProtocolVersion(string version)
 
 
 // parse request
-void HttpRequest::parseRequest(int& clientFd){
+void HttpRequest::parseRequest(int clientFd){
     string request = readRequest(clientFd);
     // std::cout << request << std::endl;
     if (request.find("\r\n\r\n") == std::string::npos)
@@ -171,7 +171,7 @@ string retrieve_extension(map<string, string> &extensions, string &path)
         return "text/plain";
 }
 
-void HttpRequest::create_response(int &clientFd)
+void HttpRequest::create_response(int clientFd)
 {
     string response;
     if (method == "GET")

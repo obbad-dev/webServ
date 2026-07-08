@@ -145,7 +145,7 @@ void ParseConfig::parse()
     }
 }
 
-const vector<Server> &ParseConfig::getSrvers() const
+const vector<Server> &ParseConfig::getServers() const
 {
     return servers;
 }

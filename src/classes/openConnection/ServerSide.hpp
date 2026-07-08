@@ -2,6 +2,7 @@
 using namespace std;
 
 #include <string>
+#include <sys/epoll.h>
 
 #include "ParseConfig.hpp"
 #include "HttpRequest.hpp"
@@ -9,14 +10,17 @@ using namespace std;
 class ServerSide
 {
 private:
-    ParseConfig &_config;
+    const vector<Server> &servers;
     HttpRequest httpRequest;
+    map<int, string> fds;
     void debug();
 
 public:
-    ServerSide(ParseConfig &config);
+    ServerSide(const vector<Server> &servers);
     ~ServerSide();
 
-    int setup();
+    void setup();
+    void create_server_sock();
+    void communication_part();
 };
 

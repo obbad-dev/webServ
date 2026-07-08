@@ -28,6 +28,6 @@ public:
     void setTarget(string target);
     void setProtocolVersion(string version);
 
-    void parseRequest(int &clientFd);
-    void create_response(int &clientFd);
+    void parseRequest(int clientFd);
+    void create_response(int clientFd);
 };
