@@ -21,7 +21,7 @@ public:
 
     HttpRequest();
     ~HttpRequest();
-    
+
     const map<string, string> &getHeaders() const;
     const string &getMethod() const;
     const string &getPath() const;

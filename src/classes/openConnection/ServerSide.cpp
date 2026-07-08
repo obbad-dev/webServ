@@ -73,7 +73,7 @@ int ServerSide::setup()
             return(perror("accept"), close(sockfd), 1);
 
         httpRequest.parseRequest(client_fd);
-
+        
         httpRequest.create_response(client_fd);
 
         close(client_fd);

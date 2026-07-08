@@ -33,7 +33,6 @@ void HttpRequest::setHeaders(string key, string value){
     transform(key.begin(), key.end(), key.begin(), ::tolower);
     headers[key] = value;
 }
-
 void HttpRequest::setMethod(string method){
     if (method != "GET" && method != "POST" && method != "DELETE")
         throw std::runtime_error("Unsupported method");
@@ -87,6 +86,7 @@ void HttpRequest::parseRequest(int& clientFd){
             setTarget(target);
             setProtocolVersion(version);
             requestLineParsed = true;
+
         }
         else
         {
@@ -109,62 +109,63 @@ void HttpRequest::parseRequest(int& clientFd){
     {
         throw std::runtime_error("Missing Host header");
     }
-    if (!headers["transfer-encoding"].empty())
-    {
-        string value = headers["transfer-encoding"];
-        std::transform(value.begin(), value.end(), value.begin(), ::tolower);
-        if (value == "chunked")
-           parseChunkedBody(clientFd, request);
-        else 
-            throw std::runtime_error("Unsupported Transfer-Encoding: " + value);
-    }
-    else if(!headers["content-length"].empty()){
+    // if (!headers["transfer-encoding"].empty())
+    // {
+    //     string value = headers["transfer-encoding"];
+    //     std::transform(value.begin(), value.end(), value.begin(), ::tolower);
+    //     if (value == "chunked")
+    //        parseChunkedBody(clientFd, request);
+    //     else 
+    //         throw std::runtime_error("Unsupported Transfer-Encoding: " + value);
+    // }
+    if(!headers["content-length"].empty()){
         parseBody(clientFd, request);
     }
     debug();
 }
 
-void HttpRequest::parseChunkedBody(int &clientFd, string& request)
-{
-    string body;
-    size_t pos = request.find("\r\n\r\n");
-    request = request.substr(pos + 4);
+// void HttpRequest::parseChunkedBody(int &clientFd, string& request)
+// {
+//     string body;
+//     size_t pos = request.find("\r\n\r\n");
+//     request = request.substr(pos + 4);
 
-    while (true)
-    {
-        if (request.find("\r\n0\r\n\r\n")  == string::npos)
-        {
-            char buffer[4096];
-            memset(buffer, 0, sizeof(buffer));
-            ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
-            if (byteRead <= 0)
-            {
-                perror("Error");
-                throw std::runtime_error("Error reading request body");
-            }
-            request.append(buffer, static_cast<size_t>(byteRead));
-        }
-        size_t chunkSizeEnd = request.find("\r\n");
-        if (chunkSizeEnd == string::npos)
-            throw std::runtime_error("Invalid chunked body format");
+//     while (true)
+//     {
+//         if (request.find("\r\n") == string::npos)
+//         {
+//             char buffer[4096];
+//             memset(buffer, 0, sizeof(buffer));
+//             ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
+//             if (byteRead <= 0)
+//             {
+//                 perror("Error");
+//                 throw std::runtime_error("Error reading request body");
+//             }
+//             request.append(buffer, static_cast<size_t>(byteRead));
+//         }
 
-        string chunkSizeStr = request.substr(0, chunkSizeEnd);
-        char *end;
-        errno = 0;
-        long chunkSize = strtol(chunkSizeStr.c_str(), &end, 16);
-        if (*end != '\0' || errno == ERANGE || chunkSize < 0)
-            throw std::runtime_error("Invalid chunk size: " + chunkSizeStr);
-        if (chunkSize == 0)
-            break;
-        size_t chunkStart = chunkSizeEnd + 2;
-        string chunckData = request.substr(chunkStart, chunkSize);
-        if (chunckData.find("\r\n") != string::npos)
-            throw runtime_error("body chunck error");
-        body.append(chunckData);
-        request.erase(0, chunkSizeEnd + chunkSize + 2);
-    }
-    setBodyContent(body);
-}
+//         size_t chunkSizeEnd = request.find("\r\n");
+//         if (chunkSizeEnd == string::npos)
+//             throw std::runtime_error("Invalid chunked body format");
+
+//         string chunkSizeStr = request.substr(0, chunkSizeEnd);
+//         char *end;
+//         errno = 0;
+//         long chunkSize = strtol(chunkSizeStr.c_str(), &end, 16);
+//         if (*end != '\0' || errno == ERANGE || chunkSize < 0)
+//             throw std::runtime_error("Invalid chunk size: " + chunkSizeStr);
+//         if (chunkSize == 0)
+//             break;
+//         size_t chunkStart = chunkSizeEnd + 2;
+//         string chunckData = request.substr(chunkStart, chunkSize);
+//         if (chunckData.find("\r\n") != string::npos)
+//             throw runtime_error("body chunck error");
+//         body.append(chunckData);
+//         request.erase(0, chunkStart + chunkSize + 2);
+//     }
+//     setBodyContent(body);
+// }
 
 void HttpRequest::parseBody(int &clientFd, string& request)
 {
