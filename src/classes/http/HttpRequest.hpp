@@ -33,7 +33,7 @@ public:
     void setProtocolVersion(string version);
     void setBodyContent(string& body);
 
-    void parseRequest(int &clientFd);
-    void create_response(int &clientFd);
+    void parseRequest(int clientFd);
+    void create_response(int clientFd);
 };
 

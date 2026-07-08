@@ -52,7 +52,7 @@ void HttpRequest::setBodyContent(string& body){
 }
 
 // parse request
-void HttpRequest::parseRequest(int& clientFd){
+void HttpRequest::parseRequest(int clientFd){
     string request = readRequest(clientFd);
     if (request.find("\r\n\r\n") == std::string::npos)
         throw std::runtime_error("Incomplete HTTP request");
@@ -270,7 +270,7 @@ string retrieve_extension(map<string, string> &extensions, string &path)
         return "text/plain";
 }
 
-void HttpRequest::create_response(int &clientFd)
+void HttpRequest::create_response(int clientFd)
 {
     string response;
     if (method == "GET")
