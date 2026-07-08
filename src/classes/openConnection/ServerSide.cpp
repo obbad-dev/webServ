@@ -62,6 +62,9 @@ void ServerSide::create_server_sock()
             if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
                 throw runtime_error("Setsockopt failed");
 
+            if (fcntl(sockfd, F_SETFL, O_NONBLOCK) == -1)
+                throw runtime_error("Fcntl failed");
+
             struct sockaddr_in s_addr;
             bzero(&s_addr, sizeof(s_addr)); // replace with our bzero
             s_addr.sin_family = AF_INET;
@@ -121,6 +124,7 @@ void ServerSide::communication_part()
                     if (clientfd == -1)
                         throw runtime_error("Accept failed");
 
+                    // cout << "Accepted client fd = " << clientfd << endl;
                     add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
                     fds[clientfd] = "Client";
                 }
