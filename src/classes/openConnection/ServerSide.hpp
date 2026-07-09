@@ -3,6 +3,7 @@ using namespace std;
 
 #include <string>
 #include <sys/epoll.h>
+#include <cerrno>
 
 #include "ParseConfig.hpp"
 #include "HttpRequest.hpp"

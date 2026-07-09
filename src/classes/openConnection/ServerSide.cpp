@@ -62,7 +62,7 @@ void ServerSide::create_server_sock()
                 throw runtime_error("Setsockopt failed");
 
             if (fcntl(sockfd, F_SETFL, O_NONBLOCK) == -1)
-                throw runtime_error("Fcntl failed");
+                throw runtime_error("Fcntl for server failed");
 
             struct sockaddr_in s_addr;
             bzero(&s_addr, sizeof(s_addr)); // replace with our bzero
@@ -119,14 +119,27 @@ void ServerSide::communication_part()
 
                 if (it->second == "Server")
                 {
-                    int clientfd = accept(it->first, NULL, NULL);
-                    if (clientfd == -1)
-                        throw runtime_error("Accept failed");
+                    while (1)
+                    {
+                        int clientfd = accept(it->first, NULL, NULL);
 
-                    // cout << "Accepted client fd = " << clientfd << endl;
-                    add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
+                        if (clientfd == -1)
+                        {
+                            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                                break;
 
-                    fds[clientfd] = "Client";
+                            throw runtime_error("Accept failed");
+                        }
+
+                        if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
+                            throw runtime_error("Fcntl for client failed");
+
+                        add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
+
+                        cout << "Accepted client fd = " << clientfd << endl;
+
+                        fds[clientfd] = "Client";
+                    }
                 }
                 else
                 {
