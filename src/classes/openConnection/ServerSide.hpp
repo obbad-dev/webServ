@@ -12,8 +12,8 @@ class ServerSide
 {
 private:
     const vector<Server> &servers;
-    HttpRequest httpRequest;
     map<int, string> fds;
+    map<int, HttpRequest> httpRequests;
     void debug();
 
 public:

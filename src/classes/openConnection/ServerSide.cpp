@@ -9,6 +9,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <arpa/inet.h> 
+
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
@@ -18,16 +20,16 @@ ServerSide::~ServerSide()
 }
 
 
-void ServerSide::debug()
-{
-    cout << "Method: " << this->httpRequest.getMethod() << '\n';
-    cout << "Target: " << this->httpRequest.getPath() << '\n';
-    cout << "Protocol: " << this->httpRequest.getProtocolVersion() << '\n';
-    cout << "------------Headers-----------" << '\n';
-    const map<string, string> &headers = this->httpRequest.getHeaders();
-    for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
-        cout << it->first << ": " << it->second << '\n';
-}
+// void ServerSide::debug()
+// {
+//     cout << "Method: " << this->httpRequest.getMethod() << '\n';
+//     cout << "Target: " << this->httpRequest.getPath() << '\n';
+//     cout << "Protocol: " << this->httpRequest.getProtocolVersion() << '\n';
+//     cout << "------------Headers-----------" << '\n';
+//     const map<string, string> &headers = this->httpRequest.getHeaders();
+//     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+//         cout << it->first << ": " << it->second << '\n';
+// }
 
 void prepare_extensions_map(map<string, string> &extensions)
 {
@@ -43,7 +45,6 @@ void prepare_extensions_map(map<string, string> &extensions)
     extensions[".pdf"] = "application/pdf";
 }
 
-#include <arpa/inet.h> // to be removed with inet_addr
 
 void ServerSide::create_server_sock()
 {
@@ -143,19 +144,10 @@ void ServerSide::communication_part()
                 }
                 else
                 {
-                    if (event_arr[i].events & EPOLLIN)
+                    if (event_arr[i].events == EPOLLIN)
                     {
-                        // cout << "Recieved request from fd = " << event_arr[i].data.fd << endl;
-                        httpRequest.parseRequest(event_arr[i].data.fd); // create for each client socket an object of type httprequest
-                        httpRequest.create_response(event_arr[i].data.fd);
+                        httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
                     }
-
-                    //     recv;
-                    // }
-                    // else
-                    // {
-                    //     send;
-                    // }
                 }
             }
         }
@@ -164,9 +156,9 @@ void ServerSide::communication_part()
 
 void ServerSide::setup()
 {
-    ServerSide::create_server_sock();
+    create_server_sock();
 
-    prepare_extensions_map(httpRequest.extensions);
+    // prepare_extensions_map(httpRequest.extensions);
 
-    ServerSide::communication_part();
+    communication_part();
 }
