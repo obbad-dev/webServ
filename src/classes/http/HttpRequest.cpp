@@ -7,10 +7,15 @@
 #include <fstream>
 #include <cstdio>
 #include <algorithm>
+#include <unistd.h>
 
 HttpRequest::HttpRequest(): method(""), target("") {
     headers_parsed = false;
-
+    contentLength = 0;
+    expectedChunkSize = 0;
+    chunk_state = READ_SIZE;
+    is_complete = false;
+    debuging = false;
 }
 HttpRequest::~HttpRequest() {}
 
@@ -29,7 +34,7 @@ const string& HttpRequest::getProtocolVersion() const{
 }
 
 void HttpRequest::setHeaders(string key, string value){
-    while (!value.empty() && (value[0] == ' ' || value[0] == '\t'))
+    while (value[0] == ' ' || value[0] == '\t')
     {
         value.erase(0, 1);
     }
@@ -38,20 +43,40 @@ void HttpRequest::setHeaders(string key, string value){
 }
 void HttpRequest::setMethod(string method){
     if (method != "GET" && method != "POST" && method != "DELETE")
-        throw std::runtime_error("Unsupported method");
+        throw std::runtime_error("Unsupported method: " + method);
     this->method = method;
 }
 void HttpRequest::setTarget(string target){
+    if (target.empty())
+        throw std::runtime_error("Invalid target: " + target);
     this->target = target;
 }
 void HttpRequest::setProtocolVersion(string version)
 {
+    if (version.empty())
+        throw std::runtime_error("Invalid protocol version: " + version);
     if (version != "HTTP/1.1" && version != "HTTP/1.0")
-        throw std::runtime_error("Unsupported HTTP version");
+        throw std::runtime_error("Unsupported HTTP version: " + version);
     protocolVersion = version;
 }
-void HttpRequest::setBodyContent(string& body){
-    this->bodyContent = body;
+
+void HttpRequest::setBodyType()
+{
+    if (headers.find("transfer-encoding") != headers.end() && headers["transfer-encoding"] == "chunked"){
+        body_type = CHUNKED;
+    }
+    else if (headers.find("content-length") != headers.end()){
+        body_type = CONTENT_LENGTH;
+        char *endPtr;
+        errno = 0;
+        long number = strtol(headers["content-length"].c_str(), &endPtr, 10);
+        if (*endPtr != '\0' || errno == ERANGE || number < 0)
+            throw std::runtime_error("Invalid Content-Length header");
+        contentLength = number;
+    }
+    else{
+        body_type = NONE;
+    }
 }
 
 //read Request
@@ -61,20 +86,127 @@ string HttpRequest::readRequest(int& clientFd)
     errno = 0;
     memset(buffer, 0, sizeof(buffer));
     ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
+    if (byteRead == 0)
+    {
+        return "";
+    }
     if (byteRead < 0)
     {
         if (errno != EAGAIN && errno != EWOULDBLOCK ){
             perror("Error");
-            throw runtime_error("");
+            throw runtime_error("Read error");
         }
     }
     return buffer;
 }
 
-// parse request
+void HttpRequest::parseHeaders(string& buffer)
+{
+    size_t pos = buffer.find("\r\n");
+    if (pos == string::npos)
+        throw std::runtime_error("Invalid request: no request line found");
+
+    string requestLine = buffer.substr(0, pos);
+    buffer.erase(0, pos + 2);
+
+    size_t methodEnd = requestLine.find(' ');
+    if (methodEnd == string::npos)
+        throw std::runtime_error("Invalid request line: no method found");
+    setMethod(requestLine.substr(0, methodEnd));
+    requestLine.erase(0, methodEnd + 1);
+
+    size_t targetEnd = requestLine.find(' ');
+    if (targetEnd == string::npos)
+        throw std::runtime_error("Invalid request line: no target found");
+    setTarget(requestLine.substr(0, targetEnd));
+    requestLine.erase(0, targetEnd + 1);
+    setProtocolVersion(requestLine);
+
+    while (!buffer.empty())
+    {
+        pos = buffer.find("\r\n");
+        if (pos == string::npos)
+            throw std::runtime_error("Invalid header format ");
+
+        string headerLine = buffer.substr(0, pos);
+        buffer.erase(0, pos + 2);
+
+        if (headerLine.empty())
+            break;
+
+        size_t colonPos = headerLine.find(':');
+        if (colonPos == string::npos)
+            throw std::runtime_error("Invalid header format: no colon found");
+
+        string key = headerLine.substr(0, colonPos);
+        string value = headerLine.substr(colonPos + 1);
+        if (key.empty() && value.empty())
+            throw std::runtime_error("Invalid header format: empty key or value");
+        setHeaders(key, value);
+    }
+}
+
+//* parse body content based on content length
+void HttpRequest::parseBodyContent(string& buffer){
+    if (buffer.size() < contentLength)
+        return;
+    this->bodyContent = buffer.substr(0, contentLength);
+    buffer.erase(0);
+    is_complete = true;
+}
+
+void HttpRequest::parseChunkedBody(string& buffer)
+{
+    while (!buffer.empty())
+    {
+        if (chunk_state == READ_SIZE)
+        {
+            size_t posEndSize = buffer.find("\r\n");
+            if (posEndSize == string::npos)
+                return;
+
+            errno = 0;
+            char *end = NULL;
+            long parsed_len = strtol(buffer.substr(0, posEndSize).c_str(), &end, 16);
+            if (errno == ERANGE || *end != '\0' || parsed_len < 0)
+                throw runtime_error("Invalid Hex Size in Chunked");
+
+            expectedChunkSize = static_cast<size_t>(parsed_len);
+
+            if (expectedChunkSize == 0)
+            {
+                buffer.erase(0);
+                is_complete = true;
+                return;
+            }
+
+            buffer.erase(0, posEndSize + 2);
+            chunk_state = READ_DATA;
+        }
+
+        if (chunk_state == READ_DATA)
+        {
+            if (buffer.size() < expectedChunkSize + 2)
+                return;
+
+            string content = buffer.substr(0, expectedChunkSize);
+            if (buffer.compare(expectedChunkSize, 2, "\r\n") != 0)
+                throw runtime_error("invalid chunk terminator");
+
+            buffer.erase(0, expectedChunkSize + 2);
+            bodyContent.append(content);
+            chunk_state = READ_SIZE;
+        }
+    }
+}
+
+//* parse request
 void HttpRequest::parseRequest(int clientFd){
     // TODO: Step 1: Read incrementally from clientFd
-    raw_buffer.append(readRequest(clientFd));
+    string str = readRequest(clientFd);
+    // if (str.empty())
+    //     return ;
+    raw_buffer.append(str);
 
     // TODO: Step 2: Parse headers if not already done
     if (!headers_parsed)
@@ -83,115 +215,30 @@ void HttpRequest::parseRequest(int clientFd){
         if (end_headers == string::npos){
             return;
         }
-        
+        string headerBuffer = raw_buffer.substr(0, end_headers + 2);
+        parseHeaders(headerBuffer);
+        raw_buffer.erase(0, end_headers + 4);
+        headers_parsed = true;
+        setBodyType();
     }
-
-
-
-
-
-
-
-
-
-
-
-    // if (!headers_parsed) {
-    //     1. Find "\r\n\r\n" in `raw_buffer`.
-    //     2. If not found: return.
-    //     3. Extract substring up to "\r\n\r\n" and parse request line and headers (you can adapt your original parsing logic here).
-    //     4. Erase the parsed header portion and "\r\n\r\n" from `raw_buffer`.
-    //     5. Set `headers_parsed = true`.
-    //     6. Inspect headers to set `body_type`:
-    //         - If "transfer-encoding" header is "chunked":
-    //               body_type = CHUNKED; chunk_state = READ_SIZE;
-    //         - Else if "content-length" header is present:
-    //               body_type = CONTENT_LENGTH; parse content_length;
-    //         - Else:
-    //               body_type = NONE; is_complete = true; return;
-    // }
-
     // TODO: Step 3: Parse body if headers are parsed but request is not complete
-    // if (headers_parsed && !is_complete) {
-    //     if (body_type == CONTENT_LENGTH) {
-    //     } 
-    //     else if (body_type == CHUNKED) {
-    //     }
-    // }
-}
-
-// void HttpRequest::parseChunkedBody(int &clientFd, string& request)
-// {
-//     string body;
-//     size_t pos = request.find("\r\n\r\n");
-//     request = request.substr(pos + 4);
-
-//     while (true)
-//     {
-//         if (request.find("\r\n") == string::npos)
-//         {
-//             char buffer[4096];
-//             memset(buffer, 0, sizeof(buffer));
-//             ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
-//             if (byteRead <= 0)
-//             {
-//                 perror("Error");
-//                 throw std::runtime_error("Error reading request body");
-//             }
-//             request.append(buffer, static_cast<size_t>(byteRead));
-//         }
-
-//         size_t chunkSizeEnd = request.find("\r\n");
-//         if (chunkSizeEnd == string::npos)
-//             throw std::runtime_error("Invalid chunked body format");
-
-//         string chunkSizeStr = request.substr(0, chunkSizeEnd);
-//         char *end;
-//         errno = 0;
-//         long chunkSize = strtol(chunkSizeStr.c_str(), &end, 16);
-//         if (*end != '\0' || errno == ERANGE || chunkSize < 0)
-//             throw std::runtime_error("Invalid chunk size: " + chunkSizeStr);
-//         if (chunkSize == 0)
-//             break;
-//         size_t chunkStart = chunkSizeEnd + 2;
-//         string chunckData = request.substr(chunkStart, chunkSize);
-//         if (chunckData.find("\r\n") != string::npos)
-//             throw runtime_error("body chunck error");
-//         body.append(chunckData);
-//         request.erase(0, chunkStart + chunkSize + 2);
-//     }
-//     setBodyContent(body);
-// }
-
-void HttpRequest::parseBody(int &clientFd, string& request)
-{
-    char *endPtr;
-    errno = 0;
-    long contentLength = strtol(headers["content-length"].c_str(), &endPtr, 10);
-    if (*endPtr != '\0' || errno == ERANGE || contentLength < 0)
-        throw std::runtime_error("Invalid Content-Length header");
-    string body;
-    body = request.substr(request.find("\r\n\r\n") + 4);
-    if (static_cast<long>(body.size()) < contentLength)
+    if (headers_parsed && !is_complete)
     {
-        while (static_cast<long>(body.size()) < contentLength)
-        {
-            char buffer[4096];
-            memset(buffer, 0, sizeof(buffer));
-            ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
-            if (byteRead <= 0)
-            {
-                perror("Error");
-                throw std::runtime_error("Error reading request body");
-            }
-            body.append(buffer, static_cast<size_t>(byteRead));
+        if (body_type == CHUNKED){
+            parseChunkedBody(raw_buffer);
+        }
+        else if (body_type == CONTENT_LENGTH){
+            parseBodyContent(raw_buffer);
         }
     }
-    if (static_cast<long>(body.size()) > contentLength)
-        body.resize(contentLength);
-
-    setBodyContent(body);
+    else{
+        if (!debuging)
+            debug();
+        debuging = true;
+    }
 }
+
+
 
 void HttpRequest::debug()
 {
@@ -206,9 +253,8 @@ void HttpRequest::debug()
     cout << "------------------------------------" << '\n';
 }
 
-// parse request
 
-
+// ! this content of my partner
 bool read_content(string &content, string &path)
 {
     ifstream file(path.c_str());
