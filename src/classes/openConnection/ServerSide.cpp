@@ -74,10 +74,14 @@ void ServerSide::create_server_sock()
             if (bind(sockfd, reinterpret_cast<sockaddr*>(&s_addr), sizeof(s_addr)) == -1)
                 throw runtime_error("Bind failed"); // close previous files when error occurs
 
-            if (listen(sockfd, 5) == -1)
+            if (listen(sockfd, SOMAXCONN) == -1)
                 throw runtime_error("listen failed"); // close previous files when error occurs
 
-            fds[sockfd] = "Server";
+            struct FdManager server;
+            server.fd = sockfd;
+            server.type = "Server";
+
+            fds[sockfd] = server;
         }
     }
 }
@@ -92,6 +96,14 @@ void add_fd_to_epoll(int epoll_fd, int fd, uint32_t events)
         throw runtime_error("Epoll ctl failed");
 }
 
+void close_fds(map<int, string> fds)
+{
+    for (map<int, string>::iterator it = fds.begin(); it != fds.end(); it++)
+    {
+        close (it->first);
+    }
+}
+
 void ServerSide::communication_part()
 {
     int epoll_fd = epoll_create(1);
@@ -99,7 +111,7 @@ void ServerSide::communication_part()
     if (epoll_fd == -1)
         throw runtime_error("Epoll creation failed");
 
-    for (map<int, string>::iterator it = fds.begin(); it != fds.end(); it++)
+    for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
     {
         add_fd_to_epoll(epoll_fd, it->first, EPOLLIN);
     }
@@ -116,9 +128,9 @@ void ServerSide::communication_part()
         {
             for (int i = 0; i < epoll_ready; i++)
             {
-                map<int, string>::iterator it = fds.find(event_arr[i].data.fd);
+                map<int, FdManager>::iterator it = fds.find(event_arr[i].data.fd);
 
-                if (it->second == "Server")
+                if (it->second.type == "Server")
                 {
                     while (1)
                     {
@@ -139,7 +151,8 @@ void ServerSide::communication_part()
 
                         cout << "Accepted client fd = " << clientfd << endl;
 
-                        fds[clientfd] = "Client";
+
+                        // fds[clientfd] = "Client";
                     }
                 }
                 else
@@ -147,6 +160,7 @@ void ServerSide::communication_part()
                     if (event_arr[i].events == EPOLLIN)
                     {
                         httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
+                        httpRequests[event_arr[i].data.fd].create_response(event_arr[i].data.fd);
                     }
                 }
             }
