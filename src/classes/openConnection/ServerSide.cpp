@@ -77,11 +77,7 @@ void ServerSide::create_server_sock()
             if (listen(sockfd, SOMAXCONN) == -1)
                 throw runtime_error("listen failed"); // close previous files when error occurs
 
-            struct FdManager server;
-            server.fd = sockfd;
-            server.type = "Server";
-
-            fds[sockfd] = server;
+            fds[sockfd] = FdManager("Server", 0);
         }
     }
 }
@@ -93,15 +89,21 @@ void add_fd_to_epoll(int epoll_fd, int fd, uint32_t events)
     ev.events = events;
     ev.data.fd = fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1)
-        throw runtime_error("Epoll ctl failed");
+        throw runtime_error("Epoll_ctl_add failed");
 }
 
-void close_fds(map<int, string> fds)
+// void close_fds(map<int, string> fds)
+// {
+//     for (map<int, string>::iterator it = fds.begin(); it != fds.end(); it++)
+//     {
+//         close (it->first);
+//     }
+// }
+
+void remove_from_epoll(int epoll_fd, int fd)
 {
-    for (map<int, string>::iterator it = fds.begin(); it != fds.end(); it++)
-    {
-        close (it->first);
-    }
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL) == -1)
+        throw runtime_error("Epoll_ctl_del failed");
 }
 
 void ServerSide::communication_part()
@@ -151,18 +153,36 @@ void ServerSide::communication_part()
 
                         cout << "Accepted client fd = " << clientfd << endl;
 
-
-                        // fds[clientfd] = "Client";
+                        fds[clientfd] = FdManager("Client", time(NULL));
                     }
                 }
                 else
                 {
-                    if (event_arr[i].events == EPOLLIN)
-                    {
-                        httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
-                        httpRequests[event_arr[i].data.fd].create_response(event_arr[i].data.fd);
-                    }
+                    // if (event_arr[i].events == EPOLLIN)
+                    // {
+                    //     httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
+                    //     httpRequests[event_arr[i].data.fd].create_response(event_arr[i].data.fd);
+                    // }
+
+                    it->second.request.parseRequest(it->first);
+                    it->second.request.create_response(it->first);
                 }
+            }
+        }
+        {
+            time_t currentTime = time(NULL);
+            for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); )
+            {
+                if (it->second.type == "Client" && (currentTime - it->second.lastActivity) > TIMEOUT)
+                {
+                    cout << "Disconnecting client with fd = " << it->first << " because timeout = " << (currentTime - it->second.lastActivity) << endl;
+                    remove_from_epoll(epoll_fd, it->first);
+                    close (it->first);
+                    map<int, FdManager>::iterator tmp = it++;
+                    fds.erase(tmp);
+                }
+                else
+                    it++;
             }
         }
     }
