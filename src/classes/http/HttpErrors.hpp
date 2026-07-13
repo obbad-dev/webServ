@@ -1,0 +1,16 @@
+#pragma once
+
+#define ERR_UNSUPPORTED_METHOD "Unsupported method: "
+#define ERR_INVALID_TARGET "Invalid target: "
+#define ERR_INVALID_PROTOCOL "Invalid protocol version: "
+#define ERR_UNSUPPORTED_VERSION "Unsupported HTTP version: "
+#define ERR_INVALID_CONTENT_LEN "Invalid Content-Length header"
+#define ERR_READ "Read error"
+#define ERR_NO_REQUEST_LINE "Invalid request: no request line found"
+#define ERR_NO_METHOD "Invalid request line: no method found"
+#define ERR_NO_TARGET "Invalid request line: no target found"
+#define ERR_INVALID_HEADER_FMT "Invalid header format "
+#define ERR_NO_COLON "Invalid header format: no colon found"
+#define ERR_EMPTY_KEY_VAL "Invalid header format: empty key or value"
+#define ERR_INVALID_HEX_SIZE "Invalid Hex Size in Chunked"
+#define ERR_INVALID_CHUNK_TERM "invalid chunk terminator"

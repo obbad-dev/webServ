@@ -10,11 +10,12 @@ using namespace std;
 
 #define TIMEOUT 30
 
+enum TYPE { SERVER, CLIENT };
 struct FdManager
 {
     // int fd;
     time_t lastActivity;
-    string type;
+    TYPE type;
     HttpRequest request;
     // HttpResponse response;
     size_t bytesSent;
@@ -23,7 +24,7 @@ struct FdManager
 
     FdManager(void){}
 
-    FdManager(string _type, time_t _lastActivity)
+    FdManager(TYPE _type, time_t _lastActivity)
     {
         // fd = _fd;
         type = _type;

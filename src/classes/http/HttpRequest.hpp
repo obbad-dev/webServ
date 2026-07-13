@@ -2,6 +2,7 @@
 using namespace std;
 #include <string>
 #include <map>
+#include "HttpErrors.hpp"
 
 class HttpRequest
 {
@@ -35,7 +36,6 @@ private:
 
 //* for debuging
     bool debuging;
-
 
     enum ChunkState { READ_SIZE, READ_DATA };
     ChunkState chunk_state;

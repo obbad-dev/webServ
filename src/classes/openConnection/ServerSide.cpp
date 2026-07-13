@@ -67,7 +67,7 @@ void ServerSide::create_server_sock()
             if (listen(sockfd, SOMAXCONN) == -1)
                 throw runtime_error("listen failed"); // close previous files when error occurs
 
-            fds[sockfd] = FdManager("Server", 0);
+            fds[sockfd] = FdManager(SERVER, 0);
         }
     }
 }
@@ -122,7 +122,7 @@ void ServerSide::communication_part()
             {
                 map<int, FdManager>::iterator it = fds.find(event_arr[i].data.fd);
 
-                if (it->second.type == "Server")
+                if (it->second.type == SERVER)
                 {
                     while (true)
                     {
@@ -143,7 +143,7 @@ void ServerSide::communication_part()
 
                         cout << "Accepted client fd = " << clientfd << endl;
 
-                        fds[clientfd] = FdManager("Client", time(NULL));
+                        fds[clientfd] = FdManager(CLIENT, time(NULL));
                     }
                 }
                 else
@@ -153,9 +153,14 @@ void ServerSide::communication_part()
                     //     httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
                     //     httpRequests[event_arr[i].data.fd].create_response(event_arr[i].data.fd);
                     // }
-
-                    it->second.request.parseRequest(it->first);
-                    it->second.request.create_response(it->first);
+                    try{
+                        it->second.request.parseRequest(it->first);
+                        it->second.request.create_response(it->first);
+                    }
+                    catch(const exception& e)
+                    {
+                        
+                    }
                 }
             }
         }
@@ -163,7 +168,7 @@ void ServerSide::communication_part()
             time_t currentTime = time(NULL);
             for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); )
             {
-                if (it->second.type == "Client" && (currentTime - it->second.lastActivity) > TIMEOUT)
+                if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
                 {
                     cout << "Disconnecting client with fd = " << it->first << " because timeout = " << (currentTime - it->second.lastActivity) << endl;
                     remove_from_epoll(epoll_fd, it->first);
