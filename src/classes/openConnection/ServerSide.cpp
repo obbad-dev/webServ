@@ -77,7 +77,7 @@ void ServerSide::create_server_sock()
             if (listen(sockfd, SOMAXCONN) == -1)
                 throw runtime_error("listen failed"); // close previous files when error occurs
 
-            fds[sockfd] = FdManager("Server", 0);
+            fds.insert(std::make_pair(sockfd, FdManager(SERVER, time(NULL), servers[i])));
         }
     }
 }
@@ -106,6 +106,16 @@ void remove_from_epoll(int epoll_fd, int fd)
         throw runtime_error("Epoll_ctl_del failed");
 }
 
+void change_epoll_event(int epoll_fd, int fd, uint32_t events)
+{
+    struct epoll_event ev;
+
+    ev.events = events;
+    ev.data.fd = fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1)
+        throw runtime_error("Epoll_ctl_mod failed");
+}
+
 void ServerSide::communication_part()
 {
     int epoll_fd = epoll_create(1);
@@ -126,56 +136,56 @@ void ServerSide::communication_part()
 
         if (epoll_ready == -1)
             throw runtime_error("Epoll wait failed");
-        else if (epoll_ready > 0)
+        for (int i = 0; i < epoll_ready; i++)
         {
-            for (int i = 0; i < epoll_ready; i++)
+            map<int, FdManager>::iterator it = fds.find(event_arr[i].data.fd);
+
+            if (it->second.type == SERVER)
             {
-                map<int, FdManager>::iterator it = fds.find(event_arr[i].data.fd);
-
-                if (it->second.type == "Server")
+                while (1)
                 {
-                    while (1)
+                    int clientfd = accept(it->first, NULL, NULL);
+
+                    if (clientfd == -1)
                     {
-                        int clientfd = accept(it->first, NULL, NULL);
+                        if (errno == EAGAIN || errno == EWOULDBLOCK)
+                            break;
 
-                        if (clientfd == -1)
-                        {
-                            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                                break;
-
-                            throw runtime_error("Accept failed");
-                        }
-
-                        if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
-                            throw runtime_error("Fcntl for client failed");
-
-                        add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
-
-                        cout << "Accepted client fd = " << clientfd << endl;
-
-                        fds[clientfd] = FdManager("Client", time(NULL));
+                        throw runtime_error("Accept failed");
                     }
-                }
-                else
-                {
-                    // if (event_arr[i].events == EPOLLIN)
-                    // {
-                    //     httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
-                    //     httpRequests[event_arr[i].data.fd].create_response(event_arr[i].data.fd);
-                    // }
 
-                    it->second.request.parseRequest(it->first);
-                    it->second.request.create_response(it->first);
+                    if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
+                        throw runtime_error("Fcntl for client failed");
+
+                    add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
+
+                    // cout << "Accepted client fd = " << clientfd << endl;
+
+                    fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), it->second.blockServer)));
                 }
+            }
+            else
+            {
+                if (event_arr[i].events & EPOLLIN)
+                {
+                    it->second.request.parseRequest(it->first);
+                    // change_epoll_event(epoll_fd, it->first, EPOLLOUT);
+                    // it->second.request.create_response(it->first, extensions);
+                }
+                // else if (event_arr[i].events & EPOLLOUT)
+                // {
+                //     // send_response();
+                //     // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                // }
             }
         }
         {
             time_t currentTime = time(NULL);
             for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); )
             {
-                if (it->second.type == "Client" && (currentTime - it->second.lastActivity) > TIMEOUT)
+                if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
                 {
-                    cout << "Disconnecting client with fd = " << it->first << " because timeout = " << (currentTime - it->second.lastActivity) << endl;
+                    // cout << "Disconnecting client with fd = " << it->first << " because timeout = " << (currentTime - it->second.lastActivity) << endl;
                     remove_from_epoll(epoll_fd, it->first);
                     close (it->first);
                     map<int, FdManager>::iterator tmp = it++;
@@ -192,7 +202,7 @@ void ServerSide::setup()
 {
     create_server_sock();
 
-    // prepare_extensions_map(httpRequest.extensions);
+    prepare_extensions_map(extensions);
 
     communication_part();
 }
