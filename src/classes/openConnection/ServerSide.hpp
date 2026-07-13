@@ -8,11 +8,35 @@ using namespace std;
 #include "ParseConfig.hpp"
 #include "HttpRequest.hpp"
 
+#define TIMEOUT 30
+
+struct FdManager
+{
+    // int fd;
+    time_t lastActivity;
+    string type;
+    HttpRequest request;
+    // HttpResponse response;
+    size_t bytesSent;
+    string recvBuffer;
+    string sendBuffer;
+
+    FdManager(void){}
+
+    FdManager(string _type, time_t _lastActivity)
+    {
+        // fd = _fd;
+        type = _type;
+        lastActivity = _lastActivity;
+    }
+};
+
 class ServerSide
 {
 private:
     const vector<Server> &servers;
-    map<int, string> fds;
+    // map<int, string> fds;
+    map<int, FdManager> fds;
     map<int, HttpRequest> httpRequests;
     void debug();
 
