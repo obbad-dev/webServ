@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <cerrno>
 
 #include <arpa/inet.h> 
 
@@ -74,7 +75,7 @@ void ServerSide::create_server_sock()
             if (bind(sockfd, reinterpret_cast<sockaddr*>(&s_addr), sizeof(s_addr)) == -1)
                 throw runtime_error("Bind failed"); // close previous files when error occurs
 
-            if (listen(sockfd, 5) == -1)
+            if (listen(sockfd, SOMAXCONN) == -1)
                 throw runtime_error("listen failed"); // close previous files when error occurs
 
             fds[sockfd] = "Server";
@@ -106,7 +107,7 @@ void ServerSide::communication_part()
 
     struct epoll_event event_arr[1024];
 
-    while (1)
+    while (true)
     {
         int epoll_ready = epoll_wait(epoll_fd, event_arr, 1024, 1000);
 
@@ -120,7 +121,7 @@ void ServerSide::communication_part()
 
                 if (it->second == "Server")
                 {
-                    while (1)
+                    while (true)
                     {
                         int clientfd = accept(it->first, NULL, NULL);
 
@@ -146,7 +147,9 @@ void ServerSide::communication_part()
                 {
                     if (event_arr[i].events == EPOLLIN)
                     {
+                        
                         httpRequests[event_arr[i].data.fd].parseRequest(event_arr[i].data.fd);
+                        httpRequests[event_arr[i].data.fd].create_response(event_arr[i].data.fd);
                     }
                 }
             }

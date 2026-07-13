@@ -88,12 +88,12 @@ string HttpRequest::readRequest(int& clientFd)
     ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
     if (byteRead == 0)
     {
+        cout  << "READ REquest " << endl;
         return "";
     }
     if (byteRead < 0)
     {
         if (errno != EAGAIN && errno != EWOULDBLOCK ){
-            perror("Error");
             throw runtime_error("Read error");
         }
     }
@@ -231,11 +231,11 @@ void HttpRequest::parseRequest(int clientFd){
             parseBodyContent(raw_buffer);
         }
     }
-    else{
-        if (!debuging)
-            debug();
-        debuging = true;
-    }
+    // else{
+    //     if (!debuging)
+    //         debug();
+    //     debuging = true;
+    // }
 }
 
 
