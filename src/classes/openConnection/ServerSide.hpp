@@ -9,24 +9,24 @@ using namespace std;
 #include "HttpRequest.hpp"
 
 #define TIMEOUT 30
+enum CONN_TYPE {SERVER, CLIENT};
 
 enum TYPE { SERVER, CLIENT };
 struct FdManager
 {
-    // int fd;
     time_t lastActivity;
-    TYPE type;
     HttpRequest request;
+    CONN_TYPE type;
     // HttpResponse response;
     size_t bytesSent;
     string recvBuffer;
     string sendBuffer;
+    const Server &blockServer;
 
-    FdManager(void){}
+    // FdManager(void){}
 
-    FdManager(TYPE _type, time_t _lastActivity)
+    FdManager(CONN_TYPE _type, time_t _lastActivity, const Server &_blockServer) : blockServer(_blockServer)
     {
-        // fd = _fd;
         type = _type;
         lastActivity = _lastActivity;
     }
@@ -44,6 +44,8 @@ private:
 public:
     ServerSide(const vector<Server> &servers);
     ~ServerSide();
+
+    map<string, string> extensions;
 
     void setup();
     void create_server_sock();

@@ -60,6 +60,5 @@ public:
     void setProtocolVersion(string version);
 
     void parseRequest(int clientFd);
-    void create_response(int clientFd);
 };
 
