@@ -7,6 +7,7 @@ using namespace std;
 
 #include "ParseConfig.hpp"
 #include "HttpRequest.hpp"
+#include "HttpResponse.hpp"
 
 #define TIMEOUT 30
 enum CONN_TYPE {SERVER, CLIENT};
@@ -14,15 +15,19 @@ enum CONN_TYPE {SERVER, CLIENT};
 struct FdManager
 {
     time_t lastActivity;
-    HttpRequest request;
     CONN_TYPE type;
-    // HttpResponse response;
+    HttpRequest request;
+    HttpResponse response;
     size_t bytesSent;
     string recvBuffer;
     string sendBuffer;
     const Server &blockServer;
+    int &epollFd; // to call epoll function from anywhere
+    static map<string, string> extensions;
 
-    FdManager(CONN_TYPE _type, time_t _lastActivity, const Server &_blockServer) : blockServer(_blockServer)
+    // FdManager(void){}
+
+    FdManager(CONN_TYPE _type, time_t _lastActivity, const Server &_blockServer, int &_epollFd) : blockServer(_blockServer), epollFd(_epollFd)
     {
         type = _type;
         lastActivity = _lastActivity;
@@ -40,8 +45,6 @@ private:
 public:
     ServerSide(const vector<Server> &servers);
     ~ServerSide();
-
-    map<string, string> extensions;
 
     void setup();
     void create_server_sock();

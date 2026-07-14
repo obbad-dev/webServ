@@ -20,19 +20,18 @@ ServerSide::~ServerSide()
 {
 }
 
-
-void prepare_extensions_map(map<string, string> &extensions)
+void init_extensions_map()
 {
-    extensions[".html"] = "text/html";
-    extensions[".css"] = "text/css";
-    extensions[".js"] = "application/javascript";
-    extensions[".jpg"] = "image/jpeg";
-    extensions[".jpeg"] = "image/jpeg";
-    extensions[".png"] = "image/png";
-    extensions[".gif"] = "image/gif";
-    extensions[".ico"] = "image/x-icon";
-    extensions[".txt"] = "text/plain";
-    extensions[".pdf"] = "application/pdf";
+    FdManager::extensions[".html"] = "text/html";
+    FdManager::extensions[".css"] = "text/css";
+    FdManager::extensions[".js"] = "application/javascript";
+    FdManager::extensions[".jpg"] = "image/jpeg";
+    FdManager::extensions[".jpeg"] = "image/jpeg";
+    FdManager::extensions[".png"] = "image/png";
+    FdManager::extensions[".gif"] = "image/gif";
+    FdManager::extensions[".ico"] = "image/x-icon";
+    FdManager::extensions[".txt"] = "text/plain";
+    FdManager::extensions[".pdf"] = "application/pdf";
 }
 
 
@@ -67,7 +66,7 @@ void ServerSide::create_server_sock()
             if (listen(sockfd, SOMAXCONN) == -1)
                 throw runtime_error("listen failed"); // close previous files when error occurs
 
-            fds.insert(std::make_pair(sockfd, FdManager(SERVER, time(NULL), servers[i])));
+            fds.insert(std::make_pair(sockfd, FdManager(SERVER, time(NULL), servers[i], opt)));
         }
     }
 }
@@ -128,6 +127,7 @@ void ServerSide::communication_part()
             throw runtime_error("Epoll wait failed");
         for (int i = 0; i < epoll_ready; i++)
         {
+            // cout << "inside the ready loop\n";
             map<int, FdManager>::iterator it = fds.find(event_arr[i].data.fd);
 
             if (it->second.type == SERVER)
@@ -149,7 +149,9 @@ void ServerSide::communication_part()
 
                     add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
 
-                    fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), it->second.blockServer)));
+                    cout << "Accepted client fd = " << clientfd << endl;
+
+                    fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), it->second.blockServer, epoll_fd)));
                 }
             }
             else
@@ -157,14 +159,14 @@ void ServerSide::communication_part()
                 if (event_arr[i].events & EPOLLIN)
                 {
                     it->second.request.parseRequest(it->first);
-                    // change_epoll_event(epoll_fd, it->first, EPOLLOUT);
-                    // it->second.request.create_response(it->first, extensions);
+                    it->second.response.create_response(it->second);
+                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                 }
-                // else if (event_arr[i].events & EPOLLOUT)
-                // {
-                //     // send_response();
-                //     // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
-                // }
+                else if (event_arr[i].events & EPOLLOUT)
+                {
+                    // send_response();
+                    // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                }
             }
         }
         {
@@ -186,11 +188,14 @@ void ServerSide::communication_part()
     }
 }
 
+map<string, string> FdManager::extensions;
+
 void ServerSide::setup()
 {
     create_server_sock();
 
-    prepare_extensions_map(extensions);
+    init_extensions_map();
 
     communication_part();
 }
+

@@ -5,6 +5,8 @@
 
 using namespace std;
 
+struct FdManager;
+
 class HttpResponse
 {
     private:
@@ -30,8 +32,8 @@ class HttpResponse
         const map<string, string>& getResponseHeaders() const;
         const string& getResponseBody() const;
 
-        void create_response(int clientFd, map<string, string> &extensions);
+        void create_response(FdManager &manager);
+        void send_response();
     
 };
-
 
