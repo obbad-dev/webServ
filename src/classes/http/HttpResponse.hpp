@@ -1,8 +1,14 @@
 #pragma once
 #include <string>
 #include <map>
+#include <iostream>
+#include <fstream>
+#include <unistd.h>
+#include <sstream>
 
 using namespace std;
+
+struct FdManager;
 
 class HttpResponse
 {
@@ -16,13 +22,6 @@ public:
     HttpResponse();
     ~HttpResponse();
 
-    void create_response(int clientFd, map<string, string> &extensions);
+    void create_response(FdManager &manager);
+    void send_response();
 };
-
-HttpResponse::HttpResponse()
-{
-}
-
-HttpResponse::~HttpResponse()
-{
-}

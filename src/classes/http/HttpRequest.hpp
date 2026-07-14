@@ -11,7 +11,7 @@ private:
 
 //* Request Line
     string method;
-    string target;
+    string path;
     string protocolVersion;
 //* headers 
     bool headers_parsed;

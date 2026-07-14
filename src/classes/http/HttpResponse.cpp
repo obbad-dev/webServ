@@ -1,79 +1,84 @@
 #include "HttpResponse.hpp"
+#include "ServerSide.hpp"
 
-// bool read_content(string &content, string &path)
-// {
-//     ifstream file(path.c_str());
-//     if (!file.is_open())
-//         return false;
+HttpResponse::HttpResponse() {}
 
-//     string tmp_content;
-//     while (1)
-//     {
-//         getline(file, tmp_content);
-//         content += tmp_content;
-//         if (file.eof())
-//             break;
-//         content += "\n";
-//     }
-//     return true;
-// }
+HttpResponse::~HttpResponse() {}
 
-// string conv_to_str(int number)
-// {
-//     ostringstream s;
-//     s << number;
-//     return s.str();
-// }
+bool read_content(string &content, string &path)
+{
+    ifstream file(path.c_str());
+    if (!file.is_open())
+        return false;
 
-// string retrieve_extension(map<string, string> &extensions, string &path)
-// {
-//     string substring;
-//     size_t pos = path.rfind(".");
-//     if (pos != string::npos)
-//         substring = path.substr(pos);
-//     else
-//         return "Not Extended";
+    string tmp_content;
+    while (1)
+    {
+        getline(file, tmp_content);
+        content += tmp_content;
+        if (file.eof())
+            break;
+        content += "\n";
+    }
+    return true;
+}
 
-//     map<string, string>::iterator it = extensions.find(substring);
-//     if (it != extensions.end())
-//         return it->second;
-//     else
-//         return "Not Extended";
-// }
+string conv_to_str(int number)
+{
+    ostringstream s;
+    s << number;
+    return s.str();
+}
 
-// void HttpResponse::create_response(int clientFd, map<string, string> &extensions)
-// {
-//     string response;
-//     if (method == "GET")
-//     {
-//         string path;
-//         if (target == "/")
-//             path = "./resources/sites/index.html";
-//         else
-//             path = "./resources/sites" + target;
+string retrieve_extension(map<string, string> &extensions, string &path)
+{
+    string substring;
+    size_t pos = path.rfind(".");
+    if (pos != string::npos)
+        substring = path.substr(pos);
+    else
+        return "Not Extended";
 
-//         string content;
-//         if (read_content(content, path))
-//         {
-//             response += "HTTP/1.1 200 OK\r\n";
-//             response += "Content-Type: ";
-//             response += retrieve_extension(extensions, path);
-//             response += "\r\n";
-//             response += "Content-Length: ";
-//             response += conv_to_str(content.size());
-//             response += "\r\n";
-//             response += "\r\n";
-//             response += content;
-//         }
-//         else
-//         {
-//             response += "HTTP/1.1 404 Not Found\r\n";
-//             response += "Content-Type: text/plain\r\n";
-//             response += "Content-Length: 9\r\n";
-//             response += "\r\n";
-//             response += "Not Found";
-//         }
-//     }
+    map<string, string>::iterator it = extensions.find(substring);
+    if (it != extensions.end())
+        return it->second;
+    else
+        return "Not Extended";
+}
+
+void HttpResponse::create_response(FdManager &manager)
+{
+    string response;
+    if (manager.request.getMethod() == "GET")
+    {
+        string path;
+        if (manager.request.getPath() == "/")
+            path = "./resources/sites/index.html";
+        else
+            path = "./resources/sites" + manager.request.getPath();
+
+        string content;
+        if (read_content(content, path))
+        {
+            manager.response.response_body += "HTTP/1.1 200 OK\r\n";
+            manager.response.response_body += "Content-Type: ";
+            manager.response.response_body += retrieve_extension(FdManager::extensions, path);
+            manager.response.response_body += "\r\n";
+            manager.response.response_body += "Content-Length: ";
+            manager.response.response_body += conv_to_str(content.size());
+            manager.response.response_body += "\r\n";
+            manager.response.response_body += "\r\n";
+            manager.response.response_body += content;
+        }
+        else
+        {
+            manager.response.response_body += "HTTP/1.1 404 Not Found\r\n";
+            manager.response.response_body += "Content-Type: text/plain\r\n";
+            manager.response.response_body += "Content-Length: 9\r\n";
+            manager.response.response_body += "\r\n";
+            manager.response.response_body += "Not Found";
+        }
+    }
     // else if (method == "POST")
     // {
 
@@ -86,4 +91,9 @@
     // {
     //     // send ERROR;
     // }
-// }
+}
+
+void HttpResponse::send_response()
+{
+    
+}

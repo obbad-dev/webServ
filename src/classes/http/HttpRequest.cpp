@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <unistd.h>
 
-HttpRequest::HttpRequest(): method(""), target("") {
+HttpRequest::HttpRequest(): method(""), path("") {
     headers_parsed = false;
     contentLength = 0;
     expectedChunkSize = 0;
@@ -27,7 +27,7 @@ const string& HttpRequest::getMethod() const {
     return this->method;
 }
 const string& HttpRequest::getPath() const {
-    return this->target;
+    return this->path;
 }
 const string& HttpRequest::getProtocolVersion() const{
     return this->protocolVersion;
@@ -49,7 +49,7 @@ void HttpRequest::setMethod(string method){
 void HttpRequest::setTarget(string target){
     if (target.empty())
         throw std::runtime_error("Invalid target: " + target);
-    this->target = target;
+    this->path = target;
 }
 void HttpRequest::setProtocolVersion(string version)
 {
@@ -243,7 +243,7 @@ void HttpRequest::parseRequest(int clientFd){
 void HttpRequest::debug()
 {
     cout << "Method: " << this->method << '\n';
-    cout << "Target: " << this->target << '\n';
+    cout << "Target: " << this->path << '\n';
     cout << "Protocol: " << this->protocolVersion << '\n';
     cout << "------------Headers-----------" << '\n';
     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
