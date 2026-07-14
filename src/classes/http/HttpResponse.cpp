@@ -1,5 +1,7 @@
 #include "HttpResponse.hpp"
 #include <sstream>
+#include <iostream>
+#include <fstream>
 
 HttpResponse::HttpResponse()
 {
@@ -67,23 +69,89 @@ std::string HttpResponse::getDefaultErrorPage(int statusCode, std::string messag
     return html;
 }
 
-// bool read_content(string &content, string &path)
-// {
-//     ifstream file(path.c_str());
-//     if (!file.is_open())
-//         return false;
+HttpResponse HttpResponse::buildErrorResponse(int& statusCode, const Server &server)
+{
+    HttpResponse response;
+    string content;
+    bool founErroPage = false;
 
-//     string tmp_content;
-//     while (1)
-//     {
-//         getline(file, tmp_content);
-//         content += tmp_content;
-//         if (file.eof())
-//             break;
-//         content += "\n";
-//     }
-//     return true;
-// }
+    response.setStatusCode(statusCode);
+    response.setMessage(getDefaultStatusMessage(statusCode));
+    map <int, string> ErrPages = server.getErrorsPages(); 
+
+    if (ErrPages.find(statusCode) != ErrPages.end())
+    {
+        string fullPath = server.getRoot() + ErrPages[statusCode];
+        if (read_content(content, fullPath)){
+            founErroPage = true;
+            response.setResponseHeader("Content-Type", "");  // i do retireive the extennsion next time
+            response.setResponseHeader("Content-Lenght", intToString(content.size()));
+            response.setResponseBody(content);
+        }
+    }
+    if (!founErroPage)
+    {
+        content = getDefaultErrorPage(statusCode, getDefaultStatusMessage(statusCode));
+        response.setResponseHeader("Content-Type", "text/html"); // i do retireive the extennsion next time
+        response.setResponseHeader("Content-Lenght", intToString(content.size()));
+        response.setResponseBody(content);
+    }
+    return response;
+}
+
+//? Setters
+void HttpResponse::setMessage(const std::string &message)
+{
+    this->message = message;
+}
+void HttpResponse::setResponseHeader(const std::string &key, const std::string &value)
+{
+    response_headers[key] = value;
+}
+void HttpResponse::setResponseBody(const std::string &body)
+{
+    response_body = body;
+}
+
+//? Getters
+int HttpResponse::getStatusCode() const
+{
+    return status_code;
+}
+const string& HttpResponse::getMessage() const
+{
+    return message;
+}
+const map<string, string>& HttpResponse::getResponseHeaders() const
+{
+    return response_headers;
+}
+const string& HttpResponse::getResponseBody() const
+{
+    return response_body;
+}
+void HttpResponse::setStatusCode(int status_code)
+{
+    this->status_code = status_code;
+}
+
+bool read_content(string &content, string &path)
+{
+    ifstream file(path.c_str());
+    if (!file.is_open())
+        return false;
+
+    string tmp_content;
+    while (1)
+    {
+        getline(file, tmp_content);
+        content += tmp_content;
+        if (file.eof())
+            break;
+        content += "\n";
+    }
+    return true;
+}
 
 // string conv_to_str(int number)
 // {

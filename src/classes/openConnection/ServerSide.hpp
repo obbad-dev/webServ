@@ -11,7 +11,6 @@ using namespace std;
 #define TIMEOUT 30
 enum CONN_TYPE {SERVER, CLIENT};
 
-enum TYPE { SERVER, CLIENT };
 struct FdManager
 {
     time_t lastActivity;
@@ -22,8 +21,6 @@ struct FdManager
     string recvBuffer;
     string sendBuffer;
     const Server &blockServer;
-
-    // FdManager(void){}
 
     FdManager(CONN_TYPE _type, time_t _lastActivity, const Server &_blockServer) : blockServer(_blockServer)
     {
@@ -36,7 +33,6 @@ class ServerSide
 {
 private:
     const vector<Server> &servers;
-    // map<int, string> fds;
     map<int, FdManager> fds;
     map<int, HttpRequest> httpRequests;
     void debug();

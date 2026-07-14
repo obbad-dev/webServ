@@ -149,8 +149,6 @@ void ServerSide::communication_part()
 
                     add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
 
-                    // cout << "Accepted client fd = " << clientfd << endl;
-
                     fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), it->second.blockServer)));
                 }
             }
