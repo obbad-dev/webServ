@@ -86,7 +86,7 @@ HttpResponse HttpResponse::buildErrorResponse(int& statusCode, const Server &ser
         string fullPath = server.getRoot() + ErrPages[statusCode];
         if (read_content(content, fullPath)){
             founErroPage = true;
-            response.setResponseHeader("Content-Type", "");  // i do retireive the extennsion next time
+            response.setResponseHeader("Content-Type", getMimeTypeErrPage(fullPath));
             response.setResponseHeader("Content-Lenght", intToString(content.size()));
             response.setResponseBody(content);
         }
@@ -94,7 +94,7 @@ HttpResponse HttpResponse::buildErrorResponse(int& statusCode, const Server &ser
     if (!founErroPage)
     {
         content = getDefaultErrorPage(statusCode, getDefaultStatusMessage(statusCode));
-        response.setResponseHeader("Content-Type", "text/html"); // i do retireive the extennsion next time
+        response.setResponseHeader("Content-Type", "text/html");
         response.setResponseHeader("Content-Lenght", intToString(content.size()));
         response.setResponseBody(content);
     }
@@ -155,6 +155,21 @@ bool read_content(string &content, string &path)
     return true;
 }
 
+string getMimeTypeErrPage(string& path)
+{
+    string substring;
+    size_t pos = path.rfind(".");
+    if (pos != string::npos)
+        substring = path.substr(pos);
+    else
+        return "text/html";
+
+    map<string, string>::iterator it = FdManager::extensions.find(substring);
+    if (it != FdManager::extensions.end())
+        return it->second;
+    else
+        return "text/html";
+}
 
 string retrieve_extension(map<string, string> &extensions, string &path)
 {
