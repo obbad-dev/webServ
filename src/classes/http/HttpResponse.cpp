@@ -1,5 +1,6 @@
 #include "HttpResponse.hpp"
 #include "ServerSide.hpp"
+#include "helperFunc.hpp"
 #include <sstream>
 #include <iostream>
 #include <fstream>
@@ -83,8 +84,8 @@ HttpResponse HttpResponse::buildErrorResponse(int statusCode, const Server &serv
     map <int, string>::const_iterator it = ErrPages.find(statusCode);
     if ( it != ErrPages.end())
     {
-        string fullPath = server.getRoot() + it->second;
-        if (read_content(content, fullPath)){
+        string fullPath;
+        if (realPath(server.getRoot(), it->second, fullPath) && read_content(content, fullPath)){
             founErroPage = true;
             response.setResponseHeader("Content-Type", getMimeTypeErrPage(fullPath));
             response.setResponseHeader("Content-Length", intToString(content.size()));
@@ -105,15 +106,6 @@ HttpResponse HttpResponse::buildErrorResponse(int statusCode, const Server &serv
 
 //TODO :
  /**
-  ** ### 4. Direct Path Concatenation Risk
-
-  *?• The Flaw: The path to the custom error page is built by joining strings directly:
-    string fullPath = server.getRoot() + ErrPages[statusCode];
-
-  • Impact: If  server.getRoot()  does not end with a  /  and the path in  ErrPages[statusCode]  does not start with one (e.g.,  resources/sites  and  errors/404.html ), they will
-  concatenate as  resources/siteserrors/404.html , resulting in a file-not-found error.
-  • What you should do: Add logic to check if a directory separator ( / ) is needed between the root and the error page relative path before concatenating them.
-
   ### 5. Architectural: Missing Response Serialization
 
   • The Flaw: The  HttpResponse  class stores headers, status code, and body in separate member variables, but lacks a method to serialize itself. In HttpResponse.cpp, you build raw HTTP

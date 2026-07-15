@@ -62,12 +62,13 @@ bool realPath(const std::string& root, const std::string& uri, std::string& resu
     if (!resolveParts(uriParts, path, false, rootDepth))
         return false;
 
-    result = "/";
+    if (root[0] == '/')
+        result = "/";
     for (size_t i = 0; i < path.size(); ++i)
     {
         if (i != 0)
-            result += "/";
-        result += path[i];
+            result.append("/");
+        result.append(path[i]);
     }
     return true;
 }
@@ -75,11 +76,12 @@ bool realPath(const std::string& root, const std::string& uri, std::string& resu
 // #include <iostream>
 // int main ()
 // {
-//     std::string root = "/resources/var/../../..//images";
-//     std::string uri = "/png";
+//     std::string root = "resources/var/../images"; // /resources/images
+//     std::string uri = "/png/../";
 //     std::string result;
 
 //     if (realPath(root, uri, result))
 //         std::cout << result << std::endl;
 // }
+
 
