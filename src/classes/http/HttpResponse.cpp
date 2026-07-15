@@ -71,7 +71,7 @@ std::string HttpResponse::getDefaultErrorPage(int statusCode, std::string messag
     return html;
 }
 
-HttpResponse HttpResponse::buildErrorResponse(int& statusCode, const Server &server)
+HttpResponse HttpResponse::buildErrorResponse(int statusCode, const Server &server)
 {
     HttpResponse response;
     string content;
@@ -79,15 +79,15 @@ HttpResponse HttpResponse::buildErrorResponse(int& statusCode, const Server &ser
 
     response.setStatusCode(statusCode);
     response.setMessage(getDefaultStatusMessage(statusCode));
-    map <int, string> ErrPages = server.getErrorsPages(); 
-
-    if (ErrPages.find(statusCode) != ErrPages.end())
+    const map <int, string>& ErrPages = server.getErrorsPages(); 
+    map <int, string>::const_iterator it = ErrPages.find(statusCode);
+    if ( it != ErrPages.end())
     {
-        string fullPath = server.getRoot() + ErrPages[statusCode];
+        string fullPath = server.getRoot() + it->second;
         if (read_content(content, fullPath)){
             founErroPage = true;
             response.setResponseHeader("Content-Type", getMimeTypeErrPage(fullPath));
-            response.setResponseHeader("Content-Lenght", intToString(content.size()));
+            response.setResponseHeader("Content-Length", intToString(content.size()));
             response.setResponseBody(content);
         }
     }
@@ -95,11 +95,54 @@ HttpResponse HttpResponse::buildErrorResponse(int& statusCode, const Server &ser
     {
         content = getDefaultErrorPage(statusCode, getDefaultStatusMessage(statusCode));
         response.setResponseHeader("Content-Type", "text/html");
-        response.setResponseHeader("Content-Lenght", intToString(content.size()));
+        response.setResponseHeader("Content-Length", intToString(content.size()));
         response.setResponseBody(content);
     }
     return response;
 }
+
+
+
+//TODO :
+ /**
+  ** ### 4. Direct Path Concatenation Risk
+
+  *?• The Flaw: The path to the custom error page is built by joining strings directly:
+    string fullPath = server.getRoot() + ErrPages[statusCode];
+
+  • Impact: If  server.getRoot()  does not end with a  /  and the path in  ErrPages[statusCode]  does not start with one (e.g.,  resources/sites  and  errors/404.html ), they will
+  concatenate as  resources/siteserrors/404.html , resulting in a file-not-found error.
+  • What you should do: Add logic to check if a directory separator ( / ) is needed between the root and the error page relative path before concatenating them.
+
+  ### 5. Architectural: Missing Response Serialization
+
+  • The Flaw: The  HttpResponse  class stores headers, status code, and body in separate member variables, but lacks a method to serialize itself. In HttpResponse.cpp, you build raw HTTP
+  status lines and header strings manually inside the body.
+  • Conceptual Issue: Once you call  buildErrorResponse , you have a populated  HttpResponse  object. However, there is no generic function to turn this object's fields into the standard
+  HTTP wire format (e.g.  HTTP/1.1 404 Not Found\r\nContent-Length: ...\r\n\r\n... ).
+  • What you should do: Add a member function to  HttpResponse  (such as  std::string serialize() const ) that automatically constructs the raw HTTP response string using the status code,
+  message, headers, and body. This prevents you from writing duplicate raw formatting code.
+
+  ### 6. Catching and Mapping Exceptions to Status Codes
+
+  • The Flaw: In ServerSide.cpp, you catch a generic  const std::exception& e  during parsing.
+  • Conceptual Issue: Standard  std::runtime_error  exceptions thrown during request parsing (e.g., method unsupported, body too large) only contain a string message but no associated
+  HTTP status code. The server loop will not know whether to respond with  400 ,  405 ,  413 ,  505 , or  500 .
+  • What you should do: Define a custom exception class (e.g.,  HttpException ) inheriting from  std::exception  that accepts and stores an HTTP status code. Throw this custom exception
+  when request parsing fails. In your main server loop, catch  HttpException  specifically, retrieve its status code, pass it to  buildErrorResponse , and fall back to status  500  for
+  other unexpected exceptions.
+
+  ### 7. File Reading Efficiency and Binary Safety
+
+  • The Flaw: HttpResponse.cpp reads the error page file line-by-line using  std::getline .
+  • Impact:
+      • Reading a file line-by-line is slower and causes multiple string allocations.
+      • If a user configures a binary file (like a custom image or logo) as an error page,  std::getline  will corrupt the binary data by stripping or transforming line endings.
+      • The parameter  string &path  is a non-const reference, meaning you cannot pass temporary strings to it.
+  • What you should do: Use  const string &path  for the path parameter, open the file in binary mode ( std::ios::binary ), and read the entire file directly into the destination string
+  using the file stream's buffer ( rdbuf() ) or a  std::stringstream .
+  */
+
 
 //? Setters
 void HttpResponse::setMessage(const std::string &message)

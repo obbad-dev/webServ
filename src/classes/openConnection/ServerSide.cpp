@@ -156,17 +156,25 @@ void ServerSide::communication_part()
             }
             else
             {
-                if (event_arr[i].events & EPOLLIN)
+                try
                 {
-                    it->second.request.parseRequest(it->first);
-                    it->second.response.create_response(it->second);
-                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
+                    if (event_arr[i].events & EPOLLIN)
+                    {
+                        it->second.request.parseRequest(it->first);
+                        it->second.response.create_response(it->second);
+                        change_epoll_event(epoll_fd, it->first, EPOLLOUT);
+                    }
+                    else if (event_arr[i].events & EPOLLOUT)
+                    {
+                        // send_response();
+                        // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                    }
                 }
-                else if (event_arr[i].events & EPOLLOUT)
+                catch(const std::exception& e)
                 {
-                    // send_response();
-                    // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                    std::cerr << e.what() << '\n';
                 }
+                
             }
         }
         {

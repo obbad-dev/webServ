@@ -21,7 +21,7 @@ class HttpResponse
 
         static string getDefaultStatusMessage(int status_code);
         static string getDefaultErrorPage(int status_code, string message);
-        static HttpResponse buildErrorResponse(int& status_code, const Server &server);
+        static HttpResponse buildErrorResponse(int status_code, const Server &server);
         
         void setStatusCode(int status_code);
         void setMessage(const string &message);
