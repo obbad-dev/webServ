@@ -16,6 +16,7 @@ HttpRequest::HttpRequest(): method(""), path("") {
     chunk_state = READ_SIZE;
     is_complete = false;
     debuging = false;
+    _keep_alive = false;
 }
 HttpRequest::~HttpRequest() {}
 
@@ -32,6 +33,7 @@ const string& HttpRequest::getPath() const {
 const string& HttpRequest::getProtocolVersion() const{
     return this->protocolVersion;
 }
+bool HttpRequest::isKeepAlive() const { return _keep_alive; }
 
 void HttpRequest::setHeaders(string key, string value){
     while (value[0] == ' ' || value[0] == '\t')
@@ -76,6 +78,21 @@ void HttpRequest::setBodyType()
     }
     else{
         body_type = NONE;
+    }
+}
+
+void HttpRequest::determineConnectionStatus() 
+{
+    if (headers.find("connection") != headers.end())
+    {
+        if (headers["connection"] == "keep-alive")
+            _keep_alive = true;
+        else if(protocolVersion == "HTTP/1.1")
+            _keep_alive = true;
+    }
+    else if (protocolVersion == "HTTP/1.1")
+    {
+        _keep_alive = true;
     }
 }
 
@@ -204,7 +221,6 @@ void HttpRequest::parseChunkedBody(string& buffer)
 void HttpRequest::parseRequest(int clientFd){
     // TODO: Step 1: Read incrementally from clientFd
     string str = readRequest(clientFd);
-    // if (str.empty())
     //     return ;
     raw_buffer.append(str);
 
