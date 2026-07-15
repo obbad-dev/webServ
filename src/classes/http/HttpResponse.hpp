@@ -17,11 +17,13 @@ private:
     string message;
     map<string, string> response_headers;
     string response_body;
+    size_t bytesSent;
 
 public:
     HttpResponse();
     ~HttpResponse();
 
     void create_response(FdManager &manager);
-    void send_response();
+    int send_response(int fd);
+    void init_bytes_var();
 };

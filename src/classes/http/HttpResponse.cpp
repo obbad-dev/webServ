@@ -5,6 +5,8 @@ HttpResponse::HttpResponse() {}
 
 HttpResponse::~HttpResponse() {}
 
+void HttpResponse::init_bytes_var() { bytesSent = 0;}
+
 bool read_content(string &content, string &path)
 {
     ifstream file(path.c_str());
@@ -93,7 +95,18 @@ void HttpResponse::create_response(FdManager &manager)
     // }
 }
 
-void HttpResponse::send_response()
+int HttpResponse::send_response(int fd)
 {
-    
+    while (bytesSent < response_body.size())
+    {
+        ssize_t n = send(fd, (response_body.data() + bytesSent), (response_body.size() - bytesSent), 0);
+        if (n == -1)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                return 0;
+            return -1;
+        }
+        bytesSent += n;
+    }
+    return 1;
 }
