@@ -78,6 +78,7 @@ void HttpRequest::setBodyType()
     }
     else{
         body_type = NONE;
+        is_complete = true;
     }
 }
 
@@ -254,6 +255,7 @@ bool HttpRequest::parseRequest(int clientFd){
     //         debug();
     //     debuging = true;
     // }
+    return true;
 }
 
 

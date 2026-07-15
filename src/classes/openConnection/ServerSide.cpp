@@ -145,9 +145,7 @@ void ServerSide::communication_part()
                     if (clientfd == -1)
                     {
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
-                            continue;
-
-                        throw runtime_error("Accept failed");
+                            break;
                     }
 
                     if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
@@ -162,21 +160,28 @@ void ServerSide::communication_part()
             }
             else
             {
+                cout << "inside else\n";
                 try
                 {
                     if (event_arr[i].events & EPOLLIN)
                     {
+                        cout << "Entered EPOLLIN fd = " << it->first << "\n";
                         if (it->second.request.parseRequest(it->first) == false)
                         {
                             disconnect_client(it->first, it->second);
                             fds.erase(it);
                             continue;
                         }
-                        it->second.response.create_response(it->second);
-                        change_epoll_event(epoll_fd, it->first, EPOLLOUT);
+                        if (it->second.request.isComplete())
+                        {
+                            it->second.response.create_response(it->second);
+                            change_epoll_event(epoll_fd, it->first, EPOLLOUT);
+                        }
+                        cout << "Finished EPOLLIN fd = " << it->first << "\n";
                     }
                     else if (event_arr[i].events & EPOLLOUT)
                     {
+                        cout << "Entered EPOLLOUT fd = " << it->first << "\n";
                         int ret = it->second.response.send_response(it->first);
                         if (ret == -1)
                         {
@@ -186,7 +191,12 @@ void ServerSide::communication_part()
                         }
                         else if (ret == 1)
                             change_epoll_event(epoll_fd, it->first, EPOLLIN);
-                        // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                        if (!it->second.request.isKeepAlive())
+                        {
+                            disconnect_client(it->first, it->second);
+                            fds.erase(it);
+                        }
+                        cout << "Finished EPOLLOUT fd = " << it->first << "\n";
                     }
                 }
                 catch(const std::exception& e)

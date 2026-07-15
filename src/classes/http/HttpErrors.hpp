@@ -14,3 +14,5 @@
 #define ERR_EMPTY_KEY_VAL "Invalid header format: empty key or value"
 #define ERR_INVALID_HEX_SIZE "Invalid Hex Size in Chunked"
 #define ERR_INVALID_CHUNK_TERM "invalid chunk terminator"
+#define ERR_TYPE_FILE "text/html"
+#define NOT_EXTENDED "Not Extended"
