@@ -16,6 +16,7 @@ HttpRequest::HttpRequest(): method(""), path("") {
     chunk_state = READ_SIZE;
     is_complete = false;
     debuging = false;
+    _keep_alive = false;
 }
 HttpRequest::~HttpRequest() {}
 
@@ -32,6 +33,7 @@ const string& HttpRequest::getPath() const {
 const string& HttpRequest::getProtocolVersion() const{
     return this->protocolVersion;
 }
+bool HttpRequest::isKeepAlive() const { return _keep_alive; }
 
 void HttpRequest::setHeaders(string key, string value){
     while (value[0] == ' ' || value[0] == '\t')
@@ -43,7 +45,7 @@ void HttpRequest::setHeaders(string key, string value){
 }
 void HttpRequest::setMethod(string method){
     if (method != "GET" && method != "POST" && method != "DELETE")
-        throw std::runtime_error("Unsupported method: " + method);
+        throw std::runtime_error(std::string(ERR_UNSUPPORTED_METHOD) + method);
     this->method = method;
 }
 void HttpRequest::setTarget(string target){
@@ -54,9 +56,9 @@ void HttpRequest::setTarget(string target){
 void HttpRequest::setProtocolVersion(string version)
 {
     if (version.empty())
-        throw std::runtime_error("Invalid protocol version: " + version);
+        throw std::runtime_error(std::string(ERR_INVALID_PROTOCOL) + version);
     if (version != "HTTP/1.1" && version != "HTTP/1.0")
-        throw std::runtime_error("Unsupported HTTP version: " + version);
+        throw std::runtime_error(std::string(ERR_UNSUPPORTED_VERSION) + version);
     protocolVersion = version;
 }
 
@@ -71,11 +73,26 @@ void HttpRequest::setBodyType()
         errno = 0;
         long number = strtol(headers["content-length"].c_str(), &endPtr, 10);
         if (*endPtr != '\0' || errno == ERANGE || number < 0)
-            throw std::runtime_error("Invalid Content-Length header");
+            throw std::runtime_error(ERR_INVALID_CONTENT_LEN);
         contentLength = number;
     }
     else{
         body_type = NONE;
+    }
+}
+
+void HttpRequest::determineConnectionStatus() 
+{
+    if (headers.find("connection") != headers.end())
+    {
+        if (headers["connection"] == "keep-alive")
+            _keep_alive = true;
+        else if(protocolVersion == "HTTP/1.1")
+            _keep_alive = true;
+    }
+    else if (protocolVersion == "HTTP/1.1")
+    {
+        _keep_alive = true;
     }
 }
 
@@ -88,12 +105,13 @@ string HttpRequest::readRequest(int& clientFd)
     ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
     if (byteRead == 0)
     {
+        cout  << "READ REquest " << endl;
         return "";
     }
     if (byteRead < 0)
     {
         if (errno != EAGAIN && errno != EWOULDBLOCK )
-            throw runtime_error("Read error");
+            throw runtime_error(ERR_READ);
     }
     return buffer;
 }
@@ -102,20 +120,20 @@ void HttpRequest::parseHeaders(string& buffer)
 {
     size_t pos = buffer.find("\r\n");
     if (pos == string::npos)
-        throw std::runtime_error("Invalid request: no request line found");
+        throw std::runtime_error(ERR_NO_REQUEST_LINE);
 
     string requestLine = buffer.substr(0, pos);
     buffer.erase(0, pos + 2);
 
     size_t methodEnd = requestLine.find(' ');
     if (methodEnd == string::npos)
-        throw std::runtime_error("Invalid request line: no method found");
+        throw std::runtime_error(ERR_NO_METHOD);
     setMethod(requestLine.substr(0, methodEnd));
     requestLine.erase(0, methodEnd + 1);
 
     size_t targetEnd = requestLine.find(' ');
     if (targetEnd == string::npos)
-        throw std::runtime_error("Invalid request line: no target found");
+        throw std::runtime_error(ERR_NO_TARGET);
     setTarget(requestLine.substr(0, targetEnd));
     requestLine.erase(0, targetEnd + 1);
     setProtocolVersion(requestLine);
@@ -124,7 +142,7 @@ void HttpRequest::parseHeaders(string& buffer)
     {
         pos = buffer.find("\r\n");
         if (pos == string::npos)
-            throw std::runtime_error("Invalid header format ");
+            throw std::runtime_error(ERR_INVALID_HEADER_FMT);
 
         string headerLine = buffer.substr(0, pos);
         buffer.erase(0, pos + 2);
@@ -134,12 +152,12 @@ void HttpRequest::parseHeaders(string& buffer)
 
         size_t colonPos = headerLine.find(':');
         if (colonPos == string::npos)
-            throw std::runtime_error("Invalid header format: no colon found");
+            throw std::runtime_error(ERR_NO_COLON);
 
         string key = headerLine.substr(0, colonPos);
         string value = headerLine.substr(colonPos + 1);
         if (key.empty() && value.empty())
-            throw std::runtime_error("Invalid header format: empty key or value");
+            throw std::runtime_error(ERR_EMPTY_KEY_VAL);
         setHeaders(key, value);
     }
 }
@@ -167,7 +185,7 @@ void HttpRequest::parseChunkedBody(string& buffer)
             char *end = NULL;
             long parsed_len = strtol(buffer.substr(0, posEndSize).c_str(), &end, 16);
             if (errno == ERANGE || *end != '\0' || parsed_len < 0)
-                throw runtime_error("Invalid Hex Size in Chunked");
+                throw std::runtime_error(ERR_INVALID_HEX_SIZE);
 
             expectedChunkSize = static_cast<size_t>(parsed_len);
 
@@ -189,7 +207,7 @@ void HttpRequest::parseChunkedBody(string& buffer)
 
             string content = buffer.substr(0, expectedChunkSize);
             if (buffer.compare(expectedChunkSize, 2, "\r\n") != 0)
-                throw runtime_error("invalid chunk terminator");
+                throw std::runtime_error(ERR_INVALID_CHUNK_TERM);
 
             buffer.erase(0, expectedChunkSize + 2);
             bodyContent.append(content);
@@ -231,12 +249,11 @@ bool HttpRequest::parseRequest(int clientFd){
             parseBodyContent(raw_buffer);
         }
     }
-    else{
-        if (!debuging)
-            debug();
-        debuging = true;
-    }
-    return true;
+    // else{
+    //     if (!debuging)
+    //         debug();
+    //     debuging = true;
+    // }
 }
 
 

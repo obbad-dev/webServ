@@ -1,5 +1,17 @@
 #include "ServerSide.hpp"
 
+#include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <iostream>
+#include <netinet/in.h>
+#include <stdexcept>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <cerrno>
+
+#include <arpa/inet.h> 
+
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
@@ -7,18 +19,6 @@ ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 ServerSide::~ServerSide()
 {
 }
-
-
-// void ServerSide::debug()
-// {
-//     cout << "Method: " << this->httpRequest.getMethod() << '\n';
-//     cout << "Target: " << this->httpRequest.getPath() << '\n';
-//     cout << "Protocol: " << this->httpRequest.getProtocolVersion() << '\n';
-//     cout << "------------Headers-----------" << '\n';
-//     const map<string, string> &headers = this->httpRequest.getHeaders();
-//     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
-//         cout << it->first << ": " << it->second << '\n';
-// }
 
 void init_extensions_map()
 {
@@ -125,7 +125,7 @@ void ServerSide::communication_part()
 
     struct epoll_event event_arr[1024];
 
-    while (1)
+    while (true)
     {
         int epoll_ready = epoll_wait(epoll_fd, event_arr, 1024, 1000);
 
@@ -162,29 +162,36 @@ void ServerSide::communication_part()
             }
             else
             {
-                if (event_arr[i].events & EPOLLIN)
+                try
                 {
-                    if (it->second.request.parseRequest(it->first) == false)
+                    if (event_arr[i].events & EPOLLIN)
                     {
-                        disconnect_client(it->first, it->second);
-                        fds.erase(it);
-                        continue;
+                        if (it->second.request.parseRequest(it->first) == false)
+                        {
+                            disconnect_client(it->first, it->second);
+                            fds.erase(it);
+                            continue;
+                        }
+                        it->second.response.create_response(it->second);
+                        change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                     }
-                    it->second.response.create_response(it->second);
-                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
+                    else if (event_arr[i].events & EPOLLOUT)
+                    {
+                        int ret = it->second.response.send_response(it->first);
+                        if (ret == -1)
+                        {
+                            disconnect_client(it->first, it->second);
+                            fds.erase(it);
+                            continue;
+                        }
+                        else if (ret == 1)
+                            change_epoll_event(epoll_fd, it->first, EPOLLIN);
+                        // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                    }
                 }
-                else if (event_arr[i].events & EPOLLOUT)
+                catch(const std::exception& e)
                 {
-                    int ret = it->second.response.send_response(it->first);
-                    if (ret == -1)
-                    {
-                        disconnect_client(it->first, it->second);
-                        fds.erase(it);
-                        continue;
-                    }
-                    else if (ret == 1)
-                        change_epoll_event(epoll_fd, it->first, EPOLLIN);
-                    // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                    std::cerr << e.what() << '\n';
                 }
             }
         }
@@ -216,3 +223,4 @@ void ServerSide::setup()
 
     communication_part();
 }
+

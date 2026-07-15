@@ -46,7 +46,6 @@ class ServerSide
 {
 private:
     const vector<Server> &servers;
-    // map<int, string> fds;
     map<int, FdManager> fds;
     map<int, HttpRequest> httpRequests;
     void debug();

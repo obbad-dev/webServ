@@ -2,6 +2,7 @@
 using namespace std;
 #include <string>
 #include <map>
+#include "HttpErrors.hpp"
 
 class HttpRequest
 {
@@ -16,6 +17,8 @@ private:
 //* headers 
     bool headers_parsed;
     map<string, string> headers;
+
+    bool _keep_alive;
 //* Body Type
     enum BodyType { NONE, CONTENT_LENGTH, CHUNKED } body_type;
 //* Body
@@ -26,6 +29,7 @@ private:
     bool is_complete;
 
 //* Private Methods
+    void determineConnectionStatus();
     void setBodyType();
     string readRequest(int &clientFd);
     void parseBodyContent(string& buffer);
@@ -35,7 +39,6 @@ private:
 
 //* for debuging
     bool debuging;
-
 
     enum ChunkState { READ_SIZE, READ_DATA };
     ChunkState chunk_state;
@@ -53,7 +56,7 @@ public:
     const string &getMethod() const;
     const string &getPath() const;
     const string& getProtocolVersion() const;
-
+    bool isKeepAlive() const ;
     void setHeaders(string key, string value);
     void setMethod(string method);
     void setTarget(string target);
