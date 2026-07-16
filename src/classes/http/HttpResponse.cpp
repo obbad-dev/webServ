@@ -244,6 +244,11 @@ void HttpResponse::init_bytes_var() { bytesSent = 0;}
 
 void HttpResponse::create_response(FdManager &manager)
 {
+    const vector<LocationConf> &location_vec = manager.blockServer.getLocations();
+    for (size_t i = 0; i < location_vec.size(); i++)
+    {
+        
+    }
     string response;
     if (manager.request.getMethod() == "GET")
     {

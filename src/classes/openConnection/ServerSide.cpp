@@ -133,7 +133,6 @@ void ServerSide::communication_part()
             throw runtime_error("Epoll wait failed");
         for (int i = 0; i < epoll_ready; i++)
         {
-            // cout << "inside the ready loop\n";
             map<int, FdManager>::iterator it = fds.find(event_arr[i].data.fd);
 
             if (it->second.type == SERVER)
@@ -153,19 +152,16 @@ void ServerSide::communication_part()
 
                     add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
 
-                    cout << "Accepted client fd = " << clientfd << endl;
-
                     fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), it->second.blockServer, epoll_fd)));
                 }
             }
             else
             {
-                cout << "inside else\n";
                 try
                 {
                     if (event_arr[i].events & EPOLLIN)
                     {
-                        cout << "Entered EPOLLIN fd = " << it->first << "\n";
+                        it->second.lastActivity = time(NULL);
                         if (it->second.request.parseRequest(it->first) == false)
                         {
                             disconnect_client(it->first, it->second);
@@ -177,11 +173,9 @@ void ServerSide::communication_part()
                             it->second.response.create_response(it->second);
                             change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                         }
-                        cout << "Finished EPOLLIN fd = " << it->first << "\n";
                     }
                     else if (event_arr[i].events & EPOLLOUT)
                     {
-                        cout << "Entered EPOLLOUT fd = " << it->first << "\n";
                         int ret = it->second.response.send_response(it->first);
                         if (ret == -1)
                         {
@@ -190,13 +184,15 @@ void ServerSide::communication_part()
                             continue;
                         }
                         else if (ret == 1)
+                        {
+                            it->second.lastActivity = time(NULL);
                             change_epoll_event(epoll_fd, it->first, EPOLLIN);
+                        }
                         if (!it->second.request.isKeepAlive())
                         {
                             disconnect_client(it->first, it->second);
                             fds.erase(it);
                         }
-                        cout << "Finished EPOLLOUT fd = " << it->first << "\n";
                     }
                 }
                 catch(const std::exception& e)

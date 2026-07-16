@@ -180,7 +180,7 @@ const bool& Server::hasSetClientMaxBodySize() const
 const map<int, string>& Server::getErrorsPages() const {
     return this->errors_page;
 }
-vector<LocationConf> &Server::getLocations()
+const vector<LocationConf> &Server::getLocations() const
 {
     return this->locations;
 }

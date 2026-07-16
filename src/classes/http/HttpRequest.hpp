@@ -44,8 +44,6 @@ private:
     ChunkState chunk_state;
 
 public:
-    map<string, string> extensions;
-
     HttpRequest();
     ~HttpRequest();
 
