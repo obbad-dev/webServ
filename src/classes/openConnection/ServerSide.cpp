@@ -1,17 +1,5 @@
 #include "ServerSide.hpp"
 
-#include <cstdio>
-#include <cstring>
-#include <fcntl.h>
-#include <iostream>
-#include <netinet/in.h>
-#include <stdexcept>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <cerrno>
-
-#include <arpa/inet.h> 
-
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
@@ -105,6 +93,12 @@ void change_epoll_event(int epoll_fd, int fd, uint32_t events)
         throw runtime_error("Epoll_ctl_mod failed");
 }
 
+void disconnect_client(int fd, FdManager &manager)
+{
+    remove_from_epoll(manager.epollFd, fd);
+    close (fd);
+}
+
 void ServerSide::communication_part()
 {
     int epoll_fd = epoll_create(1);
@@ -139,7 +133,7 @@ void ServerSide::communication_part()
                     if (clientfd == -1)
                     {
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
-                            break;
+                            continue;
 
                         throw runtime_error("Accept failed");
                     }
@@ -169,10 +163,27 @@ void ServerSide::communication_part()
                         // send_response();
                         // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
                     }
+                    if (it->second.request.parseRequest(it->first) == false)
+                    {
+                        disconnect_client(it->first, it->second);
+                        fds.erase(it);
+                        continue;
+                    }
+                    // it->second.response.create_response(it->second);
+                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                 }
                 catch(const std::exception& e)
                 {
-                    std::cerr << e.what() << '\n';
+                    int ret = it->second.response.send_response(it->first);
+                    if (ret == -1)
+                    {
+                        disconnect_client(it->first, it->second);
+                        fds.erase(it);
+                        continue;
+                    }
+                    else if (ret == 1)
+                        change_epoll_event(epoll_fd, it->first, EPOLLIN);
+                    // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
                 }
                 
             }
@@ -184,8 +195,7 @@ void ServerSide::communication_part()
                 if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
                 {
                     // cout << "Disconnecting client with fd = " << it->first << " because timeout = " << (currentTime - it->second.lastActivity) << endl;
-                    remove_from_epoll(epoll_fd, it->first);
-                    close (it->first);
+                    disconnect_client(it->first, it->second);
                     map<int, FdManager>::iterator tmp = it++;
                     fds.erase(tmp);
                 }

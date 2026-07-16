@@ -100,8 +100,8 @@ void HttpRequest::determineConnectionStatus()
 string HttpRequest::readRequest(int& clientFd)
 {
     char buffer[4096];
-    errno = 0;
-    memset(buffer, 0, sizeof(buffer));
+    memset(buffer, 0, sizeof(buffer)); // replace it with ours
+
     ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
     if (byteRead == 0)
     {
@@ -218,10 +218,13 @@ void HttpRequest::parseChunkedBody(string& buffer)
 }
 
 //* parse request
-void HttpRequest::parseRequest(int clientFd){
+bool HttpRequest::parseRequest(int clientFd){
     // TODO: Step 1: Read incrementally from clientFd
     string str = readRequest(clientFd);
-    //     return ;
+
+    if (str.empty())
+        return false;
+
     raw_buffer.append(str);
 
     // TODO: Step 2: Parse headers if not already done
@@ -229,7 +232,7 @@ void HttpRequest::parseRequest(int clientFd){
     {
         size_t end_headers = raw_buffer.find("\r\n\r\n");
         if (end_headers == string::npos){
-            return;
+            return true;
         }
         string headerBuffer = raw_buffer.substr(0, end_headers + 2);
         parseHeaders(headerBuffer);

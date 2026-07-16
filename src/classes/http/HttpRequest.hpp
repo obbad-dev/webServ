@@ -62,6 +62,6 @@ public:
     void setTarget(string target);
     void setProtocolVersion(string version);
 
-    void parseRequest(int clientFd);
+    bool parseRequest(int clientFd);
 };
 

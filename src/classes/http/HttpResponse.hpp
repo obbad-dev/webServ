@@ -9,11 +9,12 @@ struct FdManager;
 
 class HttpResponse
 {
-    private:
-        int status_code;
-        string message;
-        map<string, string> response_headers;
-        string response_body;
+private:
+    int status_code;
+    string message;
+    map<string, string> response_headers;
+    string response_body;
+    size_t bytesSent;
 
     public:
         HttpResponse();
@@ -33,7 +34,7 @@ class HttpResponse
         const string& getResponseBody() const;
 
         void create_response(FdManager &manager);
-        void send_response();
-    
+        int send_response(int fd);
+        void init_bytes_var();
 };
 

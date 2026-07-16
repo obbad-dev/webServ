@@ -5,6 +5,16 @@ using namespace std;
 #include <sys/epoll.h>
 #include <cerrno>
 
+#include <cstdio>
+#include <cstring>
+#include <fcntl.h>
+#include <iostream>
+#include <netinet/in.h>
+#include <stdexcept>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <arpa/inet.h> //not allowed
+
 #include "ParseConfig.hpp"
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
@@ -18,9 +28,6 @@ struct FdManager
     CONN_TYPE type;
     HttpRequest request;
     HttpResponse response;
-    size_t bytesSent;
-    string recvBuffer;
-    string sendBuffer;
     const Server &blockServer;
     int &epollFd; // to call epoll function from anywhere
     static map<string, string> extensions;
@@ -31,6 +38,7 @@ struct FdManager
     {
         type = _type;
         lastActivity = _lastActivity;
+        response.init_bytes_var();
     }
 };
 
