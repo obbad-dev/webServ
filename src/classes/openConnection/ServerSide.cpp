@@ -1,4 +1,5 @@
 #include "ServerSide.hpp"
+#include "HttpException.hpp"
 
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
@@ -186,19 +187,11 @@ void ServerSide::communication_part()
                         }
                         cout << "Finished EPOLLOUT fd = " << it->first << "\n";
                     }
-                    if (it->second.request.parseRequest(it->first) == false)
-                    {
-                        disconnect_client(it->first, it->second);
-                        fds.erase(it);
-                        continue;
-                    }
-                    // it->second.response.create_response(it->second);
-                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                 }
-                catch(const std::exception& e)
+                catch(const HttpException& e)
                 {
-                    cout << "Exception: " << e.what() << endl;
-                    // check if keepalive if yes switch back to EPOLLIN or disconnect client if not
+                    it->second.response.buildErrorResponse(e, it->second.blockServer);
+                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                 }
             }
         }
