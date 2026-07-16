@@ -1,5 +1,6 @@
 #include "HttpResponse.hpp"
 #include "ServerSide.hpp"
+#include "helperFunc.hpp"
 #include <sstream>
 #include <iostream>
 #include <fstream>
@@ -26,17 +27,6 @@ std::string HttpResponse::getDefaultStatusMessage(int statusCode)
         case 204: return "No Content";
         case 301: return "Moved Permanently";
         case 302: return "Found";            
-        case 400: return "Bad Request";
-        case 401: return "Unauthorized";
-        case 403: return "Forbidden";   
-        case 404: return "Not Found";
-        case 405: return "Method Not Allowed";
-        case 413: return "Payload Too Large"; 
-        case 500: return "Internal Server Error";
-        case 501: return "Not Implemented";      
-        case 502: return "Bad Gateway";    
-        case 505: return "HTTP Version Not Supported";
-        case 510: return "Not Extended";
         default:  return "Unknown Status";            
     }
 }
@@ -105,49 +95,50 @@ string getMimeType(string& path, string msg)
         return msg;
 }
 
-HttpResponse HttpResponse::buildErrorResponse(int statusCode, const Server &server)
+void HttpResponse::buildErrorResponse(const HttpException &e, const Server &server)
 {
-    HttpResponse response;
     string content;
     bool founErroPage = false;
 
-    response.setStatusCode(statusCode);
-    response.setMessage(getDefaultStatusMessage(statusCode));
+    status_code = e.getStatusCode();
+    message = e.getStatusMessage();
+
     const map <int, string>& ErrPages = server.getErrorsPages(); 
-    map <int, string>::const_iterator it = ErrPages.find(statusCode);
+    map <int, string>::const_iterator it = ErrPages.find(e.getStatusCode() );
+
     if ( it != ErrPages.end())
     {
-        string fullPath = server.getRoot() + it->second;
-        if (read_content(content, fullPath)){
+        string fullPath;
+        if (realPath(server.getRoot(), it->second, fullPath) && read_content(content, fullPath)){
             founErroPage = true;
-            response.setResponseHeader("Content-Type", getMimeType(fullPath, ERR_TYPE_FILE));
-            response.setResponseHeader("Content-Length", intToString(content.size()));
-            response.setResponseBody(content);
+            response_headers["Content-Type"] = getMimeType(fullPath, ERR_TYPE_FILE);
+            response_headers["Content-Length"] = intToString(content.size());
         }
     }
     if (!founErroPage)
     {
-        content = getDefaultErrorPage(statusCode, getDefaultStatusMessage(statusCode));
-        response.setResponseHeader("Content-Type", "text/html");
-        response.setResponseHeader("Content-Length", intToString(content.size()));
-        response.setResponseBody(content);
+        content = getDefaultErrorPage(e.getStatusCode(), e.getStatusMessage());
+        response_headers["Content-Type"] = "text/html";
+        response_headers["Content-Length"] = intToString(content.size());
     }
-    return response;
+    response_body = content;
 }
 
+void HttpResponse::serializeResponse(string httpVersion)
+{
+    response_serialized.clear();
+    response_serialized.append(httpVersion + " " + intToString(status_code) + " " + message + "\r\n");
+    for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)
+    {
+        response_serialized.append(it->first + ": " + it->second + "\r\n");
+    }
+    response_serialized.append("\r\n");
+    response_serialized.append(response_body);
+}
 
 
 //TODO :
  /**
-  ** ### 4. Direct Path Concatenation Risk
-
-  *?• The Flaw: The path to the custom error page is built by joining strings directly:
-    string fullPath = server.getRoot() + ErrPages[statusCode];
-
-  • Impact: If  server.getRoot()  does not end with a  /  and the path in  ErrPages[statusCode]  does not start with one (e.g.,  resources/sites  and  errors/404.html ), they will
-  concatenate as  resources/siteserrors/404.html , resulting in a file-not-found error.
-  • What you should do: Add logic to check if a directory separator ( / ) is needed between the root and the error page relative path before concatenating them.
-
   ### 5. Architectural: Missing Response Serialization
 
   • The Flaw: The  HttpResponse  class stores headers, status code, and body in separate member variables, but lacks a method to serialize itself. In HttpResponse.cpp, you build raw HTTP
@@ -215,22 +206,6 @@ void HttpResponse::setStatusCode(int status_code)
 }
 
 void HttpResponse::init_bytes_var() { bytesSent = 0;}
-
-// string retrieve_extension(string &path)
-// {
-//     string substring;
-//     size_t pos = path.rfind(".");
-//     if (pos != string::npos)
-//         substring = path.substr(pos);
-//     else
-//         return "Not Extended";
-
-//     map<string, string>::iterator it = FdManager::extensions.find(substring);
-//     if (it != FdManager::extensions.end())
-//         return it->second;
-//     else
-//         return "Not Extended";
-// }
 
 // look into locations if the requested path is available
     // if found attach it to the root path

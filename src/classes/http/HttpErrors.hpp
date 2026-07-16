@@ -14,5 +14,17 @@
 #define ERR_EMPTY_KEY_VAL "Invalid header format: empty key or value"
 #define ERR_INVALID_HEX_SIZE "Invalid Hex Size in Chunked"
 #define ERR_INVALID_CHUNK_TERM "invalid chunk terminator"
+
 #define ERR_TYPE_FILE "text/html"
+
+#define STATUS_BAD_REQUEST "Bad Request"
+#define STATUS_UNAUTHORIZED "Unauthorized"
+#define STATUS_FORBIDDEN "Forbidden"
+#define STATUS_NOT_FOUND "Not Found"
+#define STATUS_METHOD_NOT_ALLOWED "Method Not Allowed"
+#define STATUS_PAYLOAD_TOO_LARGE "Payload Too Large"
+#define STATUS_INTERNAL_SERVER_ERROR "Internal Server Error"
+#define STATUS_NOT_IMPLEMENTED "Not Implemented"
+#define STATUS_BAD_GATEWAY "Bad Gateway"
+#define STATUS_HTTP_VERSION_NOT_SUPPORTED "HTTP Version Not Supported"
 #define NOT_EXTENDED "Not Extended"

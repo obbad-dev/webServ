@@ -2,6 +2,7 @@
 #include <string>
 #include <map>
 #include "Server.hpp"
+#include "HttpException.hpp"
 
 using namespace std;
 
@@ -14,6 +15,7 @@ private:
     string message;
     map<string, string> response_headers;
     string response_body;
+    string response_serialized;
     size_t bytesSent;
 
 public:
@@ -22,7 +24,8 @@ public:
 
     static string getDefaultStatusMessage(int status_code);
     static string getDefaultErrorPage(int status_code, string message);
-    static HttpResponse buildErrorResponse(int status_code, const Server &server);
+    void buildErrorResponse(const HttpException &e, const Server &server);
+    void serializeResponse(string httpVersion);
     
     void setStatusCode(int status_code);
     void setMessage(const string &message);

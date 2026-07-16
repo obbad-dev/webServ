@@ -1,16 +1,5 @@
 #include "ServerSide.hpp"
-
-#include <cstdio>
-#include <cstring>
-#include <fcntl.h>
-#include <iostream>
-#include <netinet/in.h>
-#include <stdexcept>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <cerrno>
-
-#include <arpa/inet.h> 
+#include "HttpException.hpp"
 
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
@@ -195,9 +184,10 @@ void ServerSide::communication_part()
                         }
                     }
                 }
-                catch(const std::exception& e)
+                catch(const HttpException& e)
                 {
-                    std::cerr << e.what() << '\n';
+                    it->second.response.buildErrorResponse(e, it->second.blockServer);
+                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                 }
             }
         }
