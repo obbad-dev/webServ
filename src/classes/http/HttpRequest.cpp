@@ -78,6 +78,7 @@ void HttpRequest::setBodyType()
     }
     else{
         body_type = NONE;
+        is_complete = true;
     }
 }
 
@@ -110,9 +111,8 @@ string HttpRequest::readRequest(int& clientFd)
     }
     if (byteRead < 0)
     {
-        if (errno != EAGAIN && errno != EWOULDBLOCK ){
-            throw std::runtime_error(ERR_READ);
-        }
+        if (errno != EAGAIN && errno != EWOULDBLOCK )
+            throw runtime_error(ERR_READ);
     }
     return buffer;
 }
@@ -255,6 +255,7 @@ bool HttpRequest::parseRequest(int clientFd){
     //         debug();
     //     debuging = true;
     // }
+    return true;
 }
 
 

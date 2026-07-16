@@ -49,7 +49,7 @@ public:
     HttpRequest();
     ~HttpRequest();
 
-    bool isComplete() const { return is_complete; }
+    bool isComplete() const { return is_complete; } // change implementation to cpp
 
 
     const map<string, string> &getHeaders() const;

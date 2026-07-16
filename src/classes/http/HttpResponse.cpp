@@ -72,6 +72,40 @@ std::string HttpResponse::getDefaultErrorPage(int statusCode, std::string messag
     return html;
 }
 
+bool read_content(string &content, string &path)
+{
+    ifstream file(path.c_str());
+    if (!file.is_open())
+        return false;
+
+    string tmp_content;
+    while (1)
+    {
+        getline(file, tmp_content);
+        content += tmp_content;
+        if (file.eof())
+            break;
+        content += "\n";
+    }
+    return true;
+}
+
+string getMimeType(string& path, string msg)
+{
+    string substring;
+    size_t pos = path.rfind(".");
+    if (pos != string::npos)
+        substring = path.substr(pos);
+    else
+        return msg;
+
+    map<string, string>::iterator it = FdManager::extensions.find(substring);
+    if (it != FdManager::extensions.end())
+        return it->second;
+    else
+        return msg;
+}
+
 HttpResponse HttpResponse::buildErrorResponse(int statusCode, const Server &server)
 {
     HttpResponse response;
@@ -87,7 +121,7 @@ HttpResponse HttpResponse::buildErrorResponse(int statusCode, const Server &serv
         string fullPath;
         if (realPath(server.getRoot(), it->second, fullPath) && read_content(content, fullPath)){
             founErroPage = true;
-            response.setResponseHeader("Content-Type", getMimeTypeErrPage(fullPath));
+            response.setResponseHeader("Content-Type", getMimeType(fullPath, ERR_TYPE_FILE));
             response.setResponseHeader("Content-Length", intToString(content.size()));
             response.setResponseBody(content);
         }
@@ -174,55 +208,15 @@ void HttpResponse::setStatusCode(int status_code)
 
 void HttpResponse::init_bytes_var() { bytesSent = 0;}
 
-bool read_content(string &content, string &path)
-{
-    ifstream file(path.c_str());
-    if (!file.is_open())
-        return false;
+// look into locations if the requested path is available
+    // if found attach it to the root path
+        // search for root inside location block if found attach it if not use the general one
+// check if the generated path a dir or file
+// if dir, look whether you have index file or not
+// if yes work on that path
+// if not check is it autoindex
+// if yes list the files inside the directory
 
-    string tmp_content;
-    while (1)
-    {
-        getline(file, tmp_content);
-        content += tmp_content;
-        if (file.eof())
-            break;
-        content += "\n";
-    }
-    return true;
-}
-
-string getMimeTypeErrPage(string& path)
-{
-    string substring;
-    size_t pos = path.rfind(".");
-    if (pos != string::npos)
-        substring = path.substr(pos);
-    else
-        return "text/html";
-
-    map<string, string>::iterator it = FdManager::extensions.find(substring);
-    if (it != FdManager::extensions.end())
-        return it->second;
-    else
-        return "text/html";
-}
-
-string retrieve_extension(map<string, string> &extensions, string &path)
-{
-    string substring;
-    size_t pos = path.rfind(".");
-    if (pos != string::npos)
-        substring = path.substr(pos);
-    else
-        return "Not Extended";
-
-    map<string, string>::iterator it = extensions.find(substring);
-    if (it != extensions.end())
-        return it->second;
-    else
-        return "Not Extended";
-}
 
 void HttpResponse::create_response(FdManager &manager)
 {
@@ -240,7 +234,7 @@ void HttpResponse::create_response(FdManager &manager)
         {
             manager.response.response_body += "HTTP/1.1 200 OK\r\n";
             manager.response.response_body += "Content-Type: ";
-            manager.response.response_body += retrieve_extension(FdManager::extensions, path);
+            manager.response.response_body += getMimeType(path, NOT_EXTENDED);
             manager.response.response_body += "\r\n";
             manager.response.response_body += "Content-Length: ";
             manager.response.response_body += intToString(content.size());
