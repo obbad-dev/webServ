@@ -187,7 +187,6 @@ void ServerSide::communication_part()
                 catch(const HttpException& e)
                 {
                     it->second.response.buildErrorResponse(e, it->second.blockServer);
-                    change_epoll_event(epoll_fd, it->first, EPOLLOUT);
                 }
             }
         }

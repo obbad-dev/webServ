@@ -1,3 +1,5 @@
+#pragma once
+
 #include <exception>
 #include <string>
 
@@ -14,4 +16,5 @@ public:
     int getStatusCode() const;
     const std::string &getStatusMessage() const;
     virtual const char *what() const throw();
+    virtual ~HttpException() throw() {}
 };

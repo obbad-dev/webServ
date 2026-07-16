@@ -184,3 +184,6 @@ const vector<LocationConf> &Server::getLocations() const
 {
     return this->locations;
 }
+vector<LocationConf>& Server::getForModifyLocation(){
+    return this->locations;
+}

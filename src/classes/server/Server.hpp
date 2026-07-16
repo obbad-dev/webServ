@@ -53,5 +53,5 @@ class Server
         const bool& hasSetClientMaxBodySize() const;
         const map<int, string>& getErrorsPages() const;
         const vector<LocationConf> &getLocations() const;
-        
+        vector <LocationConf>& getForModifyLocation();
 };

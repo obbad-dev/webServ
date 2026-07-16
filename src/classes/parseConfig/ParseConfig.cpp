@@ -133,7 +133,7 @@ void ParseConfig::parse()
         else
             throw invalid_argument("Config file must start with [server], not " + currentToken + ".");
 
-        vector<LocationConf> &locations = server.getLocations();
+        vector<LocationConf> &locations = server.getForModifyLocation();
         for (size_t k = 0; k < locations.size(); ++k)
         {
             if (!locations[k].rootIsSet())
