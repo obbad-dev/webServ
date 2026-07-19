@@ -54,6 +54,7 @@ public:
     const string &getMethod() const;
     const string &getPath() const;
     const string& getProtocolVersion() const;
+    const string& getBodyContent() const { return bodyContent; }
     bool isKeepAlive() const ;
     void setHeaders(string key, string value);
     void setMethod(string method);

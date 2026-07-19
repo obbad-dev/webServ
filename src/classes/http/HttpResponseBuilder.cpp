@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <cstdlib>
 #include <cstdio>
+#include <fcntl.h>
 
 void HttpResponseBuilder::build(FdManager &manager)
 {
@@ -85,7 +86,7 @@ void HttpResponseBuilder::build(FdManager &manager)
             for (size_t i = 0; i < indexes.size(); ++i)
             {
                 string testIndex = physicalPath;
-                if (/*testIndex.empty() || */ testIndex[testIndex.size() - 1] != '/')
+                if (testIndex[testIndex.size() - 1] != '/')
                     testIndex += "/";
                 testIndex += indexes[i];
 
@@ -155,7 +156,7 @@ void HttpResponseBuilder::build(FdManager &manager)
         }
 
         // Static Content Handler
-        if (request.getMethod() == "GET" || request.getMethod() == "HEAD")
+        if (request.getMethod() == "GET")
         {
             string body;
             if (!readBinaryFile(physicalPath, body))
@@ -166,14 +167,7 @@ void HttpResponseBuilder::build(FdManager &manager)
             response.setMessage("OK");
             response.setResponseHeader("Content-Type", getMimeType(physicalPath, "application/octet-stream"));
             response.setResponseHeader("Content-Length", intToString(body.size()));
-            if (request.getMethod() == "HEAD")
-            {
-                response.setResponseBody("");
-            }
-            else
-            {
-                response.setResponseBody(body);
-            }
+            response.setResponseBody(body);
         }
         else if (request.getMethod() == "POST")
         {
@@ -184,65 +178,14 @@ void HttpResponseBuilder::build(FdManager &manager)
                 if (uploadDir.empty())
                     uploadDir = ".";
 
-                string filename = "";
-                string boundary = "";
-                map<string, string>::const_iterator ctIt = request.getHeaders().find("content-type");
-                if (ctIt != request.getHeaders().end())
-                {
-                    size_t bPos = ctIt->second.find("boundary=");
-                    if (bPos != string::npos)
-                    {
-                        boundary = ctIt->second.substr(bPos + 9);
-                        if (boundary.size() >= 2 && boundary[0] == '"' && boundary[boundary.size() - 1] == '"')
-                        {
-                            boundary = boundary.substr(1, boundary.size() - 2);
-                        }
-                    }
-                }
+                string filename = request.getPath();
+                size_t pos = filename.rfind('/');
+                if (pos != string::npos)
+                    filename = filename.substr(pos + 1);
 
-                string fileData;
-                if (!boundary.empty())
+                if (filename.empty() || filename == "upload")
                 {
-                    string boundaryStr = "--" + boundary;
-                    size_t partStart = request.getBodyContent().find(boundaryStr);
-                    if (partStart != string::npos)
-                    {
-                        size_t nextBoundary = request.getBodyContent().find(boundaryStr, partStart + boundaryStr.size());
-                        if (nextBoundary != string::npos)
-                        {
-                            string part = request.getBodyContent().substr(partStart, nextBoundary - partStart);
-                            size_t fnPos = part.find("filename=\"");
-                            if (fnPos != string::npos)
-                            {
-                                size_t fnEnd = part.find("\"", fnPos + 10);
-                                if (fnEnd != string::npos)
-                                {
-                                    filename = part.substr(fnPos + 10, fnEnd - (fnPos + 10));
-                                }
-                            }
-
-                            size_t dataStart = part.find("\r\n\r\n");
-                            if (dataStart != string::npos)
-                            {
-                                dataStart += 4;
-                                size_t dataEnd = part.size();
-                                if (dataEnd >= 2 && part[dataEnd - 2] == '\r' && part[dataEnd - 1] == '\n')
-                                    dataEnd -= 2;
-                                if (dataEnd > dataStart)
-                                {
-                                    fileData = part.substr(dataStart, dataEnd - dataStart);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (filename.empty())
-                {
-                    stringstream ss;
-                    ss << "upload_" << time(NULL) << "_" << rand() % 1000 << ".bin";
-                    filename = ss.str();
-                    fileData = request.getBodyContent();
+                    filename = "upload_" + intToString(time(NULL));
                 }
 
                 string finalUploadPath = uploadDir;
@@ -255,13 +198,14 @@ void HttpResponseBuilder::build(FdManager &manager)
                 {
                     throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
                 }
+                const string &fileData = request.getBodyContent();
                 outFile.write(fileData.data(), fileData.size());
                 outFile.close();
 
                 response.setStatusCode(201);
                 response.setMessage("Created");
-                response.setResponseHeader("Content-Type", "text/html");
-                string bodyContent = "<html><body><h1>201 Created</h1><p>File uploaded successfully as: " + filename + "</p></body></html>";
+                response.setResponseHeader("Content-Type", "text/plain");
+                string bodyContent = "File uploaded successfully: " + filename;
                 response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
                 response.setResponseBody(bodyContent);
             }
@@ -328,16 +272,8 @@ string HttpResponseBuilder::generateDirectoryListing(const string &dirPath, cons
     }
     
     stringstream ss;
-    ss << "<!DOCTYPE html>\n<html>\n<head>\n<title>Index of " << uriPath << "</title>\n";
-    ss << "<style>\n";
-    ss << "body { font-family: sans-serif; margin: 30px; background-color: #f7f9fa; color: #333; }\n";
-    ss << "h1 { font-size: 24px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }\n";
-    ss << "ul { list-style-type: none; padding: 0; }\n";
-    ss << "li { margin: 10px 0; font-size: 18px; }\n";
-    ss << "a { color: #3498db; text-decoration: none; }\n";
-    ss << "a:hover { text-decoration: underline; }\n";
-    ss << "</style>\n</head>\n<body>\n";
-    ss << "<h1>Index of " << uriPath << "</h1>\n<ul>\n";
+    ss << "<html><head><title>Index of " << uriPath << "</title></head><body>\n";
+    ss << "<h1>Index of " << uriPath << "</h1><hr><ul>\n";
     
     if (uriPath != "/" && !uriPath.empty())
     {
@@ -373,8 +309,7 @@ string HttpResponseBuilder::generateDirectoryListing(const string &dirPath, cons
         ss << "<li><a href=\"" << linkName << "\">" << linkName << "</a></li>\n";
     }
     closedir(dir);
-    
-    ss << "</ul>\n<hr>\n<p style=\"font-size: 12px; color: #999;\">webServ/1.0</p>\n</body>\n</html>";
+    ss << "</ul><hr></body></html>";
     return ss.str();
 }
 
@@ -398,17 +333,18 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
     HttpRequest &request = manager.request;
     HttpResponse &response = manager.response;
 
-    FILE *infile = tmpfile();
-    FILE *outfile = tmpfile();
-    if (!infile || !outfile)
+    static int cgi_counter = 0;
+    string in_name = "/tmp/cgi_in_" + intToString(cgi_counter);
+    string out_name = "/tmp/cgi_out_" + intToString(cgi_counter++);
+
+    int in_fd = open(in_name.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
+    int out_fd = open(out_name.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
+    if (in_fd < 0 || out_fd < 0)
     {
-        if (infile) fclose(infile);
-        if (outfile) fclose(outfile);
+        if (in_fd >= 0) close(in_fd);
+        if (out_fd >= 0) close(out_fd);
         throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
     }
-
-    int in_fd = fileno(infile);
-    int out_fd = fileno(outfile);
 
     if (!request.getBodyContent().empty())
     {
@@ -460,8 +396,10 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
     pid_t pid = fork();
     if (pid == -1)
     {
-        fclose(infile);
-        fclose(outfile);
+        close(in_fd);
+        close(out_fd);
+        std::remove(in_name.c_str());
+        std::remove(out_name.c_str());
         throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
     }
     else if (pid == 0)
@@ -469,8 +407,8 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
         dup2(in_fd, STDIN_FILENO);
         dup2(out_fd, STDOUT_FILENO);
 
-        fclose(infile);
-        fclose(outfile);
+        close(in_fd);
+        close(out_fd);
 
         char *argv[3];
         if (!interpreter.empty())
@@ -492,11 +430,13 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
     int status;
     waitpid(pid, &status, 0);
 
-    fclose(infile);
+    close(in_fd);
 
     if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
     {
-        fclose(outfile);
+        close(out_fd);
+        std::remove(in_name.c_str());
+        std::remove(out_name.c_str());
         throw HttpException(STATUS_BAD_GATEWAY);
     }
 
@@ -510,7 +450,9 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
             break;
         cgi_output.append(buf, bytes_read);
     }
-    fclose(outfile);
+    close(out_fd);
+    std::remove(in_name.c_str());
+    std::remove(out_name.c_str());
 
     size_t separator = cgi_output.find("\r\n\r\n");
     size_t sep_len = 4;
@@ -583,14 +525,7 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
         response.setResponseHeader("Content-Length", intToString(body.size()));
     }
 
-    if (request.getMethod() == "HEAD")
-    {
-        response.setResponseBody("");
-    }
-    else
-    {
-        response.setResponseBody(body);
-    }
+    response.setResponseBody(body);
 
     response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
 }
