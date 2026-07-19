@@ -150,7 +150,7 @@ void HttpResponseBuilder::build(FdManager &manager)
             map<string, string>::const_iterator cgiIt = cgiMap.find(ext);
             if (cgiIt != cgiMap.end())
             {
-                executeCGI(manager, physicalPath, cgiIt->second);
+                executeCGI(manager, physicalPath);
                 return;
             }
         }
@@ -328,205 +328,122 @@ bool HttpResponseBuilder::readBinaryFile(const string& filepath, string& content
     return false;
 }
 
-void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &physicalPath, const std::string &interpreter)
+void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &physicalPath)
 {
     HttpRequest &request = manager.request;
     HttpResponse &response = manager.response;
 
-    static int cgi_counter = 0;
-    string in_name = "/tmp/cgi_in_" + intToString(cgi_counter);
-    string out_name = "/tmp/cgi_out_" + intToString(cgi_counter++);
+    static int counter = 0;
+    std::string inPath = "/tmp/cgi_in_" + intToString(counter);
+    std::string outPath = "/tmp/cgi_out_" + intToString(counter++);
 
-    int in_fd = open(in_name.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
-    int out_fd = open(out_name.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
-    if (in_fd < 0 || out_fd < 0)
+    int inFd = open(inPath.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
+    int outFd = open(outPath.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
+    if (inFd < 0 || outFd < 0)
     {
-        if (in_fd >= 0) close(in_fd);
-        if (out_fd >= 0) close(out_fd);
+        if (inFd >= 0) close(inFd);
+        if (outFd >= 0) close(outFd);
         throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
     }
 
-    if (!request.getBodyContent().empty())
-    {
-        write(in_fd, request.getBodyContent().data(), request.getBodyContent().size());
-    }
-    lseek(in_fd, 0, SEEK_SET);
+    const std::string &body = request.getBodyContent();
+    if (!body.empty())
+        write(inFd, body.data(), body.size());
+    lseek(inFd, 0, SEEK_SET);
 
-    vector<string> env;
+    std::string scriptName = request.getPath();
+    std::string query;
+    size_t qPos = scriptName.find('?');
+    if (qPos != std::string::npos)
+    {
+        query = scriptName.substr(qPos + 1);
+        scriptName = scriptName.substr(0, qPos);
+    }
+
+    std::vector<std::string> env;
     env.push_back("REQUEST_METHOD=" + request.getMethod());
     env.push_back("SCRIPT_FILENAME=" + physicalPath);
-    env.push_back("SCRIPT_NAME=" + request.getPath());
-    
-    size_t qPos = request.getPath().find('?');
-    string query = "";
-    if (qPos != string::npos)
-    {
-        query = request.getPath().substr(qPos + 1);
-    }
+    env.push_back("SCRIPT_NAME=" + scriptName);
     env.push_back("QUERY_STRING=" + query);
     env.push_back("SERVER_PROTOCOL=HTTP/1.1");
     env.push_back("GATEWAY_INTERFACE=CGI/1.1");
-    env.push_back("REDIRECT_STATUS=200");
 
-    const map<string, string>& headers = request.getHeaders();
-    map<string, string>::const_iterator it;
-    if ((it = headers.find("content-length")) != headers.end())
+    const std::map<std::string, std::string> &headers = request.getHeaders();
+    std::map<std::string, std::string>::const_iterator it = headers.find("content-length");
+    if (it != headers.end())
         env.push_back("CONTENT_LENGTH=" + it->second);
-    if ((it = headers.find("content-type")) != headers.end())
+    it = headers.find("content-type");
+    if (it != headers.end())
         env.push_back("CONTENT_TYPE=" + it->second);
 
-    for (it = headers.begin(); it != headers.end(); ++it)
-    {
-        string key = it->first;
-        for (size_t i = 0; i < key.size(); ++i)
-        {
-            if (key[i] == '-') key[i] = '_';
-            else key[i] = toupper(key[i]);
-        }
-        env.push_back("HTTP_" + key + "=" + it->second);
-    }
-
-    vector<char*> envp;
+    std::vector<char*> envp;
     for (size_t i = 0; i < env.size(); ++i)
-    {
         envp.push_back(const_cast<char*>(env[i].c_str()));
-    }
     envp.push_back(NULL);
 
     pid_t pid = fork();
     if (pid == -1)
     {
-        close(in_fd);
-        close(out_fd);
-        std::remove(in_name.c_str());
-        std::remove(out_name.c_str());
+        close(inFd); close(outFd);
+        std::remove(inPath.c_str()); std::remove(outPath.c_str());
         throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
     }
-    else if (pid == 0)
+
+    if (pid == 0)
     {
-        dup2(in_fd, STDIN_FILENO);
-        dup2(out_fd, STDOUT_FILENO);
+        dup2(inFd, STDIN_FILENO);
+        dup2(outFd, STDOUT_FILENO);
+        close(inFd);
+        close(outFd);
 
-        close(in_fd);
-        close(out_fd);
+        std::string dir = physicalPath.substr(0, physicalPath.find_last_of('/'));
+        if (!dir.empty())
+            chdir(dir.c_str());
 
-        char *argv[3];
-        if (!interpreter.empty())
-        {
-            argv[0] = const_cast<char*>(interpreter.c_str());
-            argv[1] = const_cast<char*>(physicalPath.c_str());
-            argv[2] = NULL;
-        }
-        else
-        {
-            argv[0] = const_cast<char*>(physicalPath.c_str());
-            argv[1] = NULL;
-        }
-
-        execve(argv[0], argv, &envp[0]);
+        char *argv[3] = {
+            const_cast<char*>("python3"),
+            const_cast<char*>(physicalPath.c_str()),
+            NULL
+        };
+        execve("/usr/bin/python3", argv, &envp[0]);
         exit(127);
     }
 
     int status;
     waitpid(pid, &status, 0);
+    close(inFd);
 
-    close(in_fd);
-
-    if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
     {
-        close(out_fd);
-        std::remove(in_name.c_str());
-        std::remove(out_name.c_str());
+        close(outFd);
+        std::remove(inPath.c_str()); std::remove(outPath.c_str());
         throw HttpException(STATUS_BAD_GATEWAY);
     }
 
-    string cgi_output;
+    std::string output;
     char buf[4096];
-    lseek(out_fd, 0, SEEK_SET);
-    while (true)
-    {
-        ssize_t bytes_read = read(out_fd, buf, sizeof(buf));
-        if (bytes_read <= 0)
-            break;
-        cgi_output.append(buf, bytes_read);
-    }
-    close(out_fd);
-    std::remove(in_name.c_str());
-    std::remove(out_name.c_str());
+    lseek(outFd, 0, SEEK_SET);
+    ssize_t n;
+    while ((n = read(outFd, buf, sizeof(buf))) > 0)
+        output.append(buf, n);
+    close(outFd);
+    std::remove(inPath.c_str());
+    std::remove(outPath.c_str());
 
-    size_t separator = cgi_output.find("\r\n\r\n");
-    size_t sep_len = 4;
-    if (separator == string::npos)
+    size_t sep = output.find("\r\n\r\n");
+    size_t sepLen = 4;
+    if (sep == std::string::npos)
     {
-        separator = cgi_output.find("\n\n");
-        sep_len = 2;
+        sep = output.find("\n\n");
+        sepLen = 2;
     }
 
-    string body;
-    int statusCode = 200;
-    string statusMsg = "OK";
-    map<string, string> cgiHeaders;
+    std::string cgiBody = (sep == std::string::npos) ? output : output.substr(sep + sepLen);
 
-    if (separator != string::npos)
-    {
-        string headers_part = cgi_output.substr(0, separator);
-        body = cgi_output.substr(separator + sep_len);
-
-        stringstream ss(headers_part);
-        string line;
-        while (getline(ss, line))
-        {
-            if (!line.empty() && line[line.size() - 1] == '\r')
-                line.erase(line.size() - 1);
-            if (line.empty())
-                continue;
-
-            size_t colon = line.find(':');
-            if (colon != string::npos)
-            {
-                string key = line.substr(0, colon);
-                string val = line.substr(colon + 1);
-                
-                while (!key.empty() && (key[0] == ' ' || key[0] == '\t')) key.erase(0, 1);
-                while (!key.empty() && (key[key.size() - 1] == ' ' || key[key.size() - 1] == '\t')) key.erase(key.size() - 1, 1);
-                while (!val.empty() && (val[0] == ' ' || val[0] == '\t')) val.erase(0, 1);
-                while (!val.empty() && (val[val.size() - 1] == ' ' || val[val.size() - 1] == '\t')) val.erase(val.size() - 1, 1);
-
-                if (key == "Status")
-                {
-                    stringstream status_ss(val);
-                    status_ss >> statusCode;
-                    getline(status_ss, statusMsg);
-                    while (!statusMsg.empty() && (statusMsg[0] == ' ' || statusMsg[0] == '\t'))
-                        statusMsg.erase(0, 1);
-                }
-                else
-                {
-                    cgiHeaders[key] = val;
-                }
-            }
-        }
-    }
-    else
-    {
-        body = cgi_output;
-    }
-
-    response.setStatusCode(statusCode);
-    response.setMessage(statusMsg.empty() ? HttpResponse::getDefaultStatusMessage(statusCode) : statusMsg);
-    
-    for (map<string, string>::const_iterator it = cgiHeaders.begin(); it != cgiHeaders.end(); ++it)
-    {
-        response.setResponseHeader(it->first, it->second);
-    }
-    
-    if (cgiHeaders.find("Content-Length") == cgiHeaders.end() && cgiHeaders.find("content-length") == cgiHeaders.end())
-    {
-        response.setResponseHeader("Content-Length", intToString(body.size()));
-    }
-
-    response.setResponseBody(body);
-
+    response.setStatusCode(200);
+    response.setMessage("OK");
+    response.setResponseHeader("Content-Length", intToString(cgiBody.size()));
+    response.setResponseBody(cgiBody);
     response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
 }
 
