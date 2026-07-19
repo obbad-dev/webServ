@@ -1,6 +1,6 @@
 #include "ServerSide.hpp"
 #include "HttpException.hpp"
-
+#include "HttpResponseBuilder.hpp"
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
@@ -146,48 +146,43 @@ void ServerSide::communication_part()
             }
             else
             {
-                try
+                if (event_arr[i].events & EPOLLIN)
                 {
-                    if (event_arr[i].events & EPOLLIN)
+                    it->second.lastActivity = time(NULL);
+                    if (it->second.request.parseRequest(it->first) == false)
+                    {
+                        disconnect_client(it->first, it->second);
+                        fds.erase(it);
+                        continue;
+                    }
+                    if (it->second.request.isComplete())
+                    {
+                        HttpResponseBuilder::build(it->second);
+                        change_epoll_event(epoll_fd, it->first, EPOLLOUT);
+                    }
+                }
+                else if (event_arr[i].events & EPOLLOUT)
+                {
+                    int ret = it->second.response.send_response(it->first);
+                    if (ret == -1)
+                    {
+                        disconnect_client(it->first, it->second);
+                        fds.erase(it);
+                        continue;
+                    }
+                    else if (ret == 1)
                     {
                         it->second.lastActivity = time(NULL);
-                        if (it->second.request.parseRequest(it->first) == false)
-                        {
-                            disconnect_client(it->first, it->second);
-                            fds.erase(it);
-                            continue;
-                        }
-                        if (it->second.request.isComplete())
-                        {
-                            it->second.response.create_response(it->second);
-                            change_epoll_event(epoll_fd, it->first, EPOLLOUT);
-                        }
+                        change_epoll_event(epoll_fd, it->first, EPOLLIN);
                     }
-                    else if (event_arr[i].events & EPOLLOUT)
+                    if (!it->second.request.isKeepAlive())
                     {
-                        int ret = it->second.response.send_response(it->first);
-                        if (ret == -1)
-                        {
-                            disconnect_client(it->first, it->second);
-                            fds.erase(it);
-                            continue;
-                        }
-                        else if (ret == 1)
-                        {
-                            it->second.lastActivity = time(NULL);
-                            change_epoll_event(epoll_fd, it->first, EPOLLIN);
-                        }
-                        if (!it->second.request.isKeepAlive())
-                        {
-                            disconnect_client(it->first, it->second);
-                            fds.erase(it);
-                        }
+                        disconnect_client(it->first, it->second);
+                        fds.erase(it);
                     }
                 }
-                catch(const HttpException& e)
-                {
-                    it->second.response.buildErrorResponse(e, it->second.blockServer);
-                }
+                
+
             }
         }
         {
