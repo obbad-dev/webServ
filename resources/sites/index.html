@@ -4,9 +4,374 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
-    <title>test</title>
+    <title>Python CGI Dashboard & Multi-File Tester</title>
 </head>
 <body>
-    <h1>test</h1>
+    <div class="container">
+        <header>
+            <h1 id="main-title">Python CGI Multi-File Test Suite</h1>
+            <p>Test GET, POST, and DELETE methods through a modular Python backend</p>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Left Column: Actions / Forms -->
+            <div class="panel">
+                <h2 class="panel-title"><span>CGI POST Operations</span></h2>
+                
+                <!-- Task Creator -->
+                <div style="margin-bottom: 2.5rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent-indigo);">Create a New Task (POST JSON)</h3>
+                    <form id="task-form">
+                        <div class="form-group">
+                            <label for="task-title">Task Title</label>
+                            <input type="text" id="task-title" class="form-control" placeholder="e.g., Run Integration Tests" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-desc">Description</label>
+                            <textarea id="task-desc" class="form-control" placeholder="Describe the task details..." required></textarea>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="form-group">
+                                <label for="task-priority">Priority</label>
+                                <select id="task-priority" class="form-control">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium" selected>Medium</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="task-date">Target Date</label>
+                                <input type="date" id="task-date" class="form-control" required>
+                            </div>
+                        </div>
+                        <button type="submit" id="btn-submit-task" class="btn btn-primary">Create Task</button>
+                    </form>
+                </div>
+
+                <!-- File Uploader -->
+                <div>
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent-teal);">Upload a File (POST Multipart)</h3>
+                    <form id="file-form">
+                        <div class="file-upload-wrapper">
+                            <input type="file" id="file-input" class="file-upload-input" required>
+                            <div class="file-upload-label" id="upload-label">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+                                </svg>
+                                <span id="file-label-text">Drag & drop or click to choose file</span>
+                            </div>
+                        </div>
+                        <button type="submit" id="btn-upload-file" class="btn btn-secondary">Upload File</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column: Results & Lists -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                <!-- Tasks List Panel -->
+                <div class="panel">
+                    <h2 class="panel-title">
+                        <span>Active Tasks (GET / DELETE)</span>
+                        <button id="btn-refresh-tasks" style="background: none; border: none; cursor: pointer; color: var(--accent-teal); font-size: 0.9rem;">Refresh</button>
+                    </h2>
+                    <div id="tasks-list" class="list-container">
+                        <div class="empty-state">Loading tasks...</div>
+                    </div>
+                </div>
+
+                <!-- Uploaded Files Panel -->
+                <div class="panel">
+                    <h2 class="panel-title">
+                        <span>Uploaded Files (GET / DELETE)</span>
+                        <button id="btn-refresh-files" style="background: none; border: none; cursor: pointer; color: var(--accent-teal); font-size: 0.9rem;">Refresh</button>
+                    </h2>
+                    <div id="files-list" class="list-container">
+                        <div class="empty-state">Loading files...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Diagnostic Logs -->
+        <div class="panel diag-panel">
+            <h2 class="panel-title"><span>CGI Execution Diagnostics (Last Call)</span></h2>
+            <div id="diagnostics" class="diag-grid">
+                <div class="diag-key">LAST_METHOD</div><div class="diag-val" id="diag-method">-</div>
+                <div class="diag-key">QUERY_STRING</div><div class="diag-val" id="diag-query">-</div>
+                <div class="diag-key">CONTENT_TYPE</div><div class="diag-val" id="diag-type">-</div>
+                <div class="diag-key">CONTENT_LENGTH</div><div class="diag-val" id="diag-length">-</div>
+                <div class="diag-key">SCRIPT_NAME</div><div class="diag-val" id="diag-script">-</div>
+                <div class="diag-key">SCRIPT_FILENAME</div><div class="diag-val" id="diag-filename">-</div>
+                <div class="diag-key">SERVER_PROTOCOL</div><div class="diag-val" id="diag-protocol">-</div>
+                <div class="diag-key">GATEWAY_INTERFACE</div><div class="diag-val" id="diag-gateway">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        // Set today's date in date picker
+        document.getElementById('task-date').valueAsDate = new Date();
+
+        // Update file label text when file selected
+        const fileInput = document.getElementById('file-input');
+        const fileLabelText = document.getElementById('file-label-text');
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files.length > 0) {
+                fileLabelText.textContent = `Selected: ${fileInput.files[0].name} (${(fileInput.files[0].size/1024).toFixed(1)} KB)`;
+            } else {
+                fileLabelText.textContent = "Drag & drop or click to choose file";
+            }
+        });
+
+        // Toast notifications helper
+        function showToast(message, isError = false) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            if (isError) {
+                toast.style.borderColor = '#ef4444';
+            }
+            toast.innerHTML = `
+                <span style="color: ${isError ? '#ef4444' : 'var(--accent-teal)'}; font-weight: bold;">
+                    ${isError ? '✕' : '✓'}
+                </span>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Diagnostics renderer
+        function updateDiagnostics(env) {
+            if (!env) return;
+            document.getElementById('diag-method').textContent = env.REQUEST_METHOD || '-';
+            document.getElementById('diag-query').textContent = env.QUERY_STRING || '(empty)';
+            document.getElementById('diag-type').textContent = env.CONTENT_TYPE || '(empty)';
+            document.getElementById('diag-length').textContent = env.CONTENT_LENGTH || '0';
+            document.getElementById('diag-script').textContent = env.SCRIPT_NAME || '-';
+            document.getElementById('diag-filename').textContent = env.SCRIPT_FILENAME || '-';
+            document.getElementById('diag-protocol').textContent = env.SERVER_PROTOCOL || '-';
+            document.getElementById('diag-gateway').textContent = env.GATEWAY_INTERFACE || '-';
+        }
+
+        // Fetch tasks
+        async function fetchTasks() {
+            try {
+                const response = await fetch('/cgi/api.py?resource=tasks');
+                const data = await response.json();
+                updateDiagnostics(data._env);
+                
+                const list = document.getElementById('tasks-list');
+                list.innerHTML = '';
+                
+                if (!data.tasks || data.tasks.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No active tasks. Create one!</div>';
+                    return;
+                }
+                
+                data.tasks.forEach(task => {
+                    const priorityClass = `badge-${task.priority.toLowerCase()}`;
+                    const card = document.createElement('div');
+                    card.className = 'task-card';
+                    card.innerHTML = `
+                        <div class="task-header">
+                            <span class="task-title">${escapeHtml(task.title)}</span>
+                            <span class="badge ${priorityClass}">${task.priority}</span>
+                        </div>
+                        <div class="task-desc">${escapeHtml(task.description)}</div>
+                        <div class="task-footer">
+                            <span class="task-date">Due: ${task.date}</span>
+                            <button class="btn btn-danger" onclick="deleteTask(${task.id})">Delete</button>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById('tasks-list').innerHTML = '<div class="empty-state" style="color: #ef4444;">Error connecting to Python CGI</div>';
+            }
+        }
+
+        // Fetch files
+        async function fetchFiles() {
+            try {
+                const response = await fetch('/cgi/api.py?resource=files');
+                const data = await response.json();
+                updateDiagnostics(data._env);
+                
+                const list = document.getElementById('files-list');
+                list.innerHTML = '';
+                
+                if (!data.files || data.files.length === 0) {
+                    list.innerHTML = '<div class="empty-state">No uploaded files. Upload one!</div>';
+                    return;
+                }
+                
+                data.files.forEach(file => {
+                    const sizeStr = file.size > 1024 * 1024 
+                        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+                        : `${(file.size / 1024).toFixed(1)} KB`;
+                    
+                    const item = document.createElement('div');
+                    item.className = 'file-item';
+                    item.innerHTML = `
+                        <div class="file-info">
+                            <div class="file-icon">📄</div>
+                            <div class="file-details">
+                                <a href="cgi/uploads/${encodeURIComponent(file.name)}" target="_blank" class="file-name" style="text-decoration: none;">
+                                    ${escapeHtml(file.name)}
+                                </a>
+                                <span class="file-size">${sizeStr}</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-danger" onclick="deleteFile('${escapeJs(file.name)}')">Delete</button>
+                    `;
+                    list.appendChild(item);
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById('files-list').innerHTML = '<div class="empty-state" style="color: #ef4444;">Error connecting to Python CGI</div>';
+            }
+        }
+
+        // Create Task (POST JSON)
+        document.getElementById('task-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('task-title').value;
+            const description = document.getElementById('task-desc').value;
+            const priority = document.getElementById('task-priority').value;
+            const date = document.getElementById('task-date').value;
+            
+            try {
+                const response = await fetch('/cgi/api.py?resource=tasks', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title, description, priority, date })
+                });
+                
+                const data = await response.json();
+                updateDiagnostics(data._env);
+                
+                if (data.status === 'success') {
+                    showToast('Task created successfully');
+                    document.getElementById('task-form').reset();
+                    document.getElementById('task-date').valueAsDate = new Date();
+                    fetchTasks();
+                } else {
+                    showToast(data.message || 'Failed to create task', true);
+                }
+            } catch (err) {
+                showToast('Network error while posting task', true);
+            }
+        });
+
+        // Upload File (POST Multipart Form-Data)
+        document.getElementById('file-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/cgi/api.py?resource=files', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                updateDiagnostics(data._env);
+                
+                if (data.status === 'success') {
+                    showToast('File uploaded successfully');
+                    document.getElementById('file-form').reset();
+                    fileLabelText.textContent = "Drag & drop or click to choose file";
+                    fetchFiles();
+                } else {
+                    showToast(data.message || 'Failed to upload file', true);
+                }
+            } catch (err) {
+                showToast('Network error while uploading file', true);
+            }
+        });
+
+        // Delete Task (DELETE)
+        async function deleteTask(id) {
+            if (!confirm('Are you sure you want to delete this task?')) return;
+            try {
+                const response = await fetch(`/cgi/api.py?resource=tasks&id=${id}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                updateDiagnostics(data._env);
+                
+                if (data.status === 'success') {
+                    showToast('Task deleted successfully');
+                    fetchTasks();
+                } else {
+                    showToast(data.message || 'Failed to delete task', true);
+                }
+            } catch (err) {
+                showToast('Network error while deleting task', true);
+            }
+        }
+
+        // Delete File (DELETE)
+        async function deleteFile(filename) {
+            if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
+            try {
+                const response = await fetch(`/cgi/api.py?resource=files&file=${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                updateDiagnostics(data._env);
+                
+                if (data.status === 'success') {
+                    showToast('File deleted successfully');
+                    fetchFiles();
+                } else {
+                    showToast(data.message || 'Failed to delete file', true);
+                }
+            } catch (err) {
+                showToast('Network error while deleting file', true);
+            }
+        }
+
+        // HTML escaping helper
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function escapeJs(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        // Register Refresh Buttons
+        document.getElementById('btn-refresh-tasks').addEventListener('click', fetchTasks);
+        document.getElementById('btn-refresh-files').addEventListener('click', fetchFiles);
+
+        // Initial Load
+        fetchTasks();
+        fetchFiles();
+    </script>
 </body>
 </html>

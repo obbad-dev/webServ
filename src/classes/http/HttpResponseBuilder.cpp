@@ -18,7 +18,7 @@ void HttpResponseBuilder::build(FdManager &manager)
     HttpRequest &request = manager.request;
     HttpResponse &response = manager.response;
     const Server &server = manager.blockServer;
-
+    // cout << "requested site: " << request.getPath() << "\n";
     try
     {
         // 1. Client max body size verification
@@ -48,6 +48,7 @@ void HttpResponseBuilder::build(FdManager &manager)
             const set<string> &allowed = location->getAllowMethods();
             if (allowed.find(request.getMethod()) == allowed.end())
             {
+                // cout << "not allowed method\n";
                 response.buildErrorResponse(HttpException(STATUS_METHOD_NOT_ALLOWED), server);
                 // Set Allow header
                 string allowHeader;
@@ -77,7 +78,7 @@ void HttpResponseBuilder::build(FdManager &manager)
         {
             throw HttpException(STATUS_NOT_FOUND);
         }
-
+        // cout << "checking file type\n";
         // Case A: Directory
         if (S_ISDIR(pathStat.st_mode))
         {
@@ -318,10 +319,10 @@ bool HttpResponseBuilder::readBinaryFile(const string& filepath, string& content
     ifstream file(filepath.c_str(), ios::in | ios::binary | ios::ate);
     if (!file.is_open())
         return false;
-    
+
     streamsize size = file.tellg();
     file.seekg(0, ios::beg);
-    
+
     content.resize(size);
     if (file.read(&content[0], size))
         return true;
@@ -445,27 +446,4 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
     response.setResponseHeader("Content-Length", intToString(cgiBody.size()));
     response.setResponseBody(cgiBody);
     response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
-}
-
-string HttpResponseBuilder::getMimeType(const string &path, const string &defaultMime)
-{
-    string substring;
-    size_t pos = path.rfind(".");
-    if (pos != string::npos)
-        substring = path.substr(pos);
-    else
-        return defaultMime;
-
-    map<string, string>::iterator it = FdManager::extensions.find(substring);
-    if (it != FdManager::extensions.end())
-        return it->second;
-    else
-        return defaultMime;
-}
-
-string HttpResponseBuilder::intToString(int number)
-{
-    stringstream ss;
-    ss << number;
-    return ss.str();
 }
