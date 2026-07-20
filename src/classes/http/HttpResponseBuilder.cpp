@@ -334,116 +334,17 @@ void HttpResponseBuilder::executeCGI(FdManager &manager, const std::string &phys
     HttpRequest &request = manager.request;
     HttpResponse &response = manager.response;
 
-    static int counter = 0;
-    std::string inPath = "/tmp/cgi_in_" + intToString(counter);
-    std::string outPath = "/tmp/cgi_out_" + intToString(counter++);
+    std::string inPath = "/tmp/cgi_in";
 
     int inFd = open(inPath.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
-    int outFd = open(outPath.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
-    if (inFd < 0 || outFd < 0)
+
+    if (inFd < 0)
     {
-        if (inFd >= 0) close(inFd);
-        if (outFd >= 0) close(outFd);
         throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
     }
 
     const std::string &body = request.getBodyContent();
     if (!body.empty())
         write(inFd, body.data(), body.size());
-    lseek(inFd, 0, SEEK_SET);
 
-    std::string scriptName = request.getPath();
-    std::string query;
-    size_t qPos = scriptName.find('?');
-    if (qPos != std::string::npos)
-    {
-        query = scriptName.substr(qPos + 1);
-        scriptName = scriptName.substr(0, qPos);
-    }
-
-    std::vector<std::string> env;
-    env.push_back("REQUEST_METHOD=" + request.getMethod());
-    env.push_back("SCRIPT_FILENAME=" + physicalPath);
-    env.push_back("SCRIPT_NAME=" + scriptName);
-    env.push_back("QUERY_STRING=" + query);
-    env.push_back("SERVER_PROTOCOL=HTTP/1.1");
-    env.push_back("GATEWAY_INTERFACE=CGI/1.1");
-
-    const std::map<std::string, std::string> &headers = request.getHeaders();
-    std::map<std::string, std::string>::const_iterator it = headers.find("content-length");
-    if (it != headers.end())
-        env.push_back("CONTENT_LENGTH=" + it->second);
-    it = headers.find("content-type");
-    if (it != headers.end())
-        env.push_back("CONTENT_TYPE=" + it->second);
-
-    std::vector<char*> envp;
-    for (size_t i = 0; i < env.size(); ++i)
-        envp.push_back(const_cast<char*>(env[i].c_str()));
-    envp.push_back(NULL);
-
-    pid_t pid = fork();
-    if (pid == -1)
-    {
-        close(inFd); close(outFd);
-        std::remove(inPath.c_str()); std::remove(outPath.c_str());
-        throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-    }
-
-    if (pid == 0)
-    {
-        dup2(inFd, STDIN_FILENO);
-        dup2(outFd, STDOUT_FILENO);
-        close(inFd);
-        close(outFd);
-
-        std::string dir = physicalPath.substr(0, physicalPath.find_last_of('/'));
-        if (!dir.empty())
-            chdir(dir.c_str());
-
-        char *argv[3] = {
-            const_cast<char*>("python3"),
-            const_cast<char*>(physicalPath.c_str()),
-            NULL
-        };
-        execve("/usr/bin/python3", argv, &envp[0]);
-        exit(127);
-    }
-
-    int status;
-    waitpid(pid, &status, 0);
-    close(inFd);
-
-    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
-    {
-        close(outFd);
-        std::remove(inPath.c_str()); std::remove(outPath.c_str());
-        throw HttpException(STATUS_BAD_GATEWAY);
-    }
-
-    std::string output;
-    char buf[4096];
-    lseek(outFd, 0, SEEK_SET);
-    ssize_t n;
-    while ((n = read(outFd, buf, sizeof(buf))) > 0)
-        output.append(buf, n);
-    close(outFd);
-    std::remove(inPath.c_str());
-    std::remove(outPath.c_str());
-
-    size_t sep = output.find("\r\n\r\n");
-    size_t sepLen = 4;
-    if (sep == std::string::npos)
-    {
-        sep = output.find("\n\n");
-        sepLen = 2;
-    }
-
-    std::string cgiBody = (sep == std::string::npos) ? output : output.substr(sep + sepLen);
-
-    response.setStatusCode(200);
-    response.setMessage("OK");
-    response.setResponseHeader("Content-Length", intToString(cgiBody.size()));
-    response.setResponseBody(cgiBody);
-    response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
 }
