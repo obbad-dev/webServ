@@ -52,7 +52,19 @@ void HttpRequest::setMethod(string method){
 void HttpRequest::setTarget(string target){
     if (target.empty())
         throw HttpException(ERR_INVALID_TARGET);
-    this->path = target;
+	if (target[0] != '/')
+		throw HttpException(ERR_INVALID_TARGET);
+	
+	size_t pos = target.find("?");
+	if (pos != string::npos)
+	{
+		this->path = target.substr(0, pos);
+		this->queryString = target.substr(pos + 1);
+	}
+	else{
+    	this->path = target;
+		this->queryString = "";
+	}
 }
 void HttpRequest::setProtocolVersion(string version)
 {

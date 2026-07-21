@@ -14,6 +14,8 @@ private:
     string method;
     string path;
     string protocolVersion;
+	string queryString;
+
 //* headers 
     bool headers_parsed;
     map<string, string> headers;
@@ -55,6 +57,8 @@ public:
     const string &getPath() const;
     const string& getProtocolVersion() const;
     const string& getBodyContent() const { return bodyContent; }
+	const string& getQuery() const { return queryString; }
+
     bool isKeepAlive() const ;
     void setHeaders(string key, string value);
     void setMethod(string method);
