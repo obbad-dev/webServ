@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <unistd.h>
 #include "HttpException.hpp"
+#include "Server.hpp"
+#include "helperFunc.hpp"
 
 HttpRequest::HttpRequest(): method(""), path("") {
     headers_parsed = false;
@@ -284,4 +286,33 @@ void HttpRequest::debug()
     cout << "------------Body-----------" << '\n';
     cout << this->bodyContent << '\n';
     cout << "------------------------------------" << '\n';
+}
+
+bool HttpRequest::isCgi(const Server& server, string& script_path) const
+{
+    size_t dot_pos = path.find_last_of('.');
+    if (dot_pos == string::npos) return false;
+    string ext = path.substr(dot_pos);
+
+    const vector<LocationConf>& locations = server.getLocations();
+    const LocationConf* matched_loc = NULL;
+    size_t max_match_len = 0;
+
+    for (size_t i = 0; i < locations.size(); ++i) {
+        const string& loc_path = locations[i].getPath();
+        if (path.find(loc_path) == 0 && loc_path.length() > max_match_len) {
+            matched_loc = &locations[i];
+            max_match_len = loc_path.length();
+        }
+    }
+
+    if (matched_loc) {
+        const map<string, string>& cgiPass = matched_loc->getCgiPass();
+        if (cgiPass.find(ext) != cgiPass.end()) {
+            string root = matched_loc->rootIsSet() ? matched_loc->getRoot() : server.getRoot();
+            realPath(root, path, script_path);
+            return true;
+        }
+    }
+    return false;
 }

@@ -28,6 +28,7 @@ public:
 	static string getDefaultStatusMessage(int status_code);
 	static string getDefaultErrorPage(int status_code, string message);
 	void buildErrorResponse(const HttpException &e, const Server &server);
+	void buildStaticResponse(const HttpRequest& request, const Server& server);
 	void serializeResponse(string httpVersion);
 
 	void setStatusCode(int status_code);
@@ -41,6 +42,7 @@ public:
 
 	static void prepareCGI(FdManager &fdManager, const string &cgiPath);
 	static void excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events);
+	void parseCgiOutput();
 	int send_response(int fd);
 	void init_bytes_var();
 };

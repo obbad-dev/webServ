@@ -22,8 +22,7 @@ using namespace std;
 #define TIMEOUT 30
 enum CONN_TYPE {SERVER, CLIENT};
 enum STATCGI {
-	WRITE_DATA,
-	READ_DATA,
+	NOT_FINISHED,
 	FINISHED
 };
 
@@ -55,7 +54,7 @@ struct FdManager
         lastActivity = _lastActivity;
         response.init_bytes_var();
 		cgi_finished = false;
-		cgi_state = FINISHED;
+		cgi_state = NOT_FINISHED;
 		cgi_bytes_written = 0;
 		to_cgi_fd = -1;
 		from_cgi_fd = -1;
@@ -70,7 +69,13 @@ private:
     map<int, FdManager> fds;
     map<int, int> cgiToClient;
     map<int, HttpRequest> httpRequests;
+
     void debug();
+    void acceptNewConnections(int epoll_fd, int server_fd, FdManager& serverManager);
+    void handleClientInput(int epoll_fd, int client_fd, map<int, FdManager>::iterator& it);
+    void handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_t events, map<int, FdManager>::iterator& it);
+    void handleClientOutput(int epoll_fd, int client_fd, map<int, FdManager>::iterator& it);
+    void handleClientTimeouts();
 
 public:
     ServerSide(const vector<Server> &servers);

@@ -91,6 +91,151 @@ void disconnect_client(int fd, FdManager &manager)
     close (fd);
 }
 
+void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager& serverManager)
+{
+    while (1)
+    {
+        int clientfd = accept(server_fd, NULL, NULL);
+
+        if (clientfd == -1)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            return; // Other errors can be ignored for now, just break loop
+        }
+
+        if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
+            throw runtime_error("Fcntl for client failed");
+
+        add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
+
+        fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), serverManager.blockServer, epoll_fd, serverManager.listen)));
+    }
+}
+
+void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManager>::iterator& it)
+{
+    // Update activity timer to prevent timeout
+    it->second.lastActivity = time(NULL);
+
+    try {
+        // Read and parse the incoming HTTP request
+        if (it->second.request.parseRequest(client_fd) == false)
+        {
+            // Parsing failed or client disconnected
+            disconnect_client(client_fd, it->second);
+            fds.erase(it);
+            return;
+        }
+
+        // Check if the request is fully received and parsed
+        if (it->second.request.isComplete())
+        {
+            string cgi_path = ""; 
+            bool is_cgi = it->second.request.isCgi(it->second.blockServer, cgi_path);
+            
+            if (is_cgi) {
+                // Prepare pipes and fork the CGI process
+                it->second.response.prepareCGI(it->second, cgi_path);
+                
+                // Map both ends of the CGI pipe back to this client's file descriptor
+                cgiToClient[it->second.to_cgi_fd] = client_fd;
+                cgiToClient[it->second.from_cgi_fd] = client_fd;
+            } else {
+                // It's a static file request. We need to build the static response here.
+                it->second.response.buildStaticResponse(it->second.request, it->second.blockServer);
+                it->second.response.serializeResponse("HTTP/1.1");
+
+                // Once the response is built, we wait for the socket to be writable
+                change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
+            }
+        }
+    } catch (const HttpException& e) {
+        // Handle any errors thrown during parsing or building the response
+        it->second.response.buildErrorResponse(e, it->second.blockServer);
+        it->second.response.serializeResponse("HTTP/1.1");
+        change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
+    }
+}
+
+void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_t events, map<int, FdManager>::iterator& it)
+{
+    try {
+        // Execute CGI read or write operations based on the event and triggered FD
+        it->second.response.excuteCGI(it->second, cgi_fd, events);
+        
+        // If the CGI process has completely finished (both pipes closed and process reaped)
+        if (it->second.cgi_state == FINISHED) {
+            // Clean up the pipe-to-client mappings
+            cgiToClient.erase(it->second.to_cgi_fd);
+            cgiToClient.erase(it->second.from_cgi_fd);
+            
+            // 1. Parse the raw CGI output to extract headers and the real body
+            it->second.response.parseCgiOutput();
+            
+            // 2. Build the final HTTP response string
+            it->second.response.serializeResponse("HTTP/1.1");
+            
+            // 3. Now we tell epoll we are ready to send it to the client
+            change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
+        }
+    } catch (const HttpException& e) {
+        // If the CGI process fails, build an HTTP error response (e.g. 500)
+        it->second.response.buildErrorResponse(e, it->second.blockServer);
+        cgiToClient.erase(it->second.to_cgi_fd);
+        cgiToClient.erase(it->second.from_cgi_fd);
+        change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
+    }
+}
+
+void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdManager>::iterator& it)
+{
+    // Attempt to send the serialized HTTP response over the socket
+    int ret = it->second.response.send_response(client_fd);
+    
+    if (ret == -1)
+    {
+        // Connection error while sending
+        disconnect_client(client_fd, it->second);
+        fds.erase(it);
+    }
+    else if (ret == 1)
+    {
+        // The entire response was successfully sent
+        it->second.lastActivity = time(NULL);
+        
+        // Switch back to listening for new requests on this connection (Keep-Alive)
+        change_epoll_event(epoll_fd, client_fd, EPOLLIN);
+        
+        if (!it->second.request.isKeepAlive())
+        {
+            // If the client requested Connection: close, disconnect immediately
+            disconnect_client(client_fd, it->second);
+            fds.erase(it);
+        }
+    }
+    // If ret == 0, it means EAGAIN (socket buffer full). We do nothing and wait for next EPOLLOUT.
+}
+
+void ServerSide::handleClientTimeouts()
+{
+    time_t currentTime = time(NULL);
+    for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); )
+    {
+        // Check if the connection has been idle longer than the allowed TIMEOUT
+        if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
+        {
+            disconnect_client(it->first, it->second);
+            map<int, FdManager>::iterator tmp = it++;
+            fds.erase(tmp);
+        }
+        else
+        {
+            it++;
+        }
+    }
+}
+
 void ServerSide::communication_part()
 {
     int epoll_fd = epoll_create(1);
@@ -98,6 +243,7 @@ void ServerSide::communication_part()
     if (epoll_fd == -1)
         throw runtime_error("Epoll creation failed");
 
+    // Add all server listening sockets to epoll
     for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
     {
         add_fd_to_epoll(epoll_fd, it->first, EPOLLIN);
@@ -107,122 +253,48 @@ void ServerSide::communication_part()
 
     while (true)
     {
+        // Wait for an event on any of the monitored file descriptors (timeout 1000ms)
         int epoll_ready = epoll_wait(epoll_fd, event_arr, 1024, 1000);
 
         if (epoll_ready == -1)
             throw runtime_error("Epoll wait failed");
+            
         for (int i = 0; i < epoll_ready; i++)
         {
             int current_fd = event_arr[i].data.fd;
+            
+            // Check if the triggered fd is a CGI pipe. If so, map it to its client connection.
             map<int, int>::iterator cgi_it = cgiToClient.find(current_fd);
             int client_fd = (cgi_it != cgiToClient.end()) ? cgi_it->second : current_fd;
             
-            map<int, FdManager>::iterator it = fds.find(client_fd);
-		
-            if (it == fds.end()) continue;
-
-            if (it->second.type == SERVER)
+            // Find the state manager for this connection
+            map<int, FdManager>::iterator manager_it = fds.find(client_fd);
+            if (manager_it == fds.end())
+				continue;
+            if (manager_it->second.type == SERVER)
             {
-                while (1)
-                {
-                    int clientfd = accept(it->first, NULL, NULL);
-
-                    if (clientfd == -1)
-                    {
-                        if (errno == EAGAIN || errno == EWOULDBLOCK)
-                            break;
-                    }
-
-                    if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
-                        throw runtime_error("Fcntl for client failed");
-
-                    add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
-
-                    fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), it->second.blockServer, epoll_fd, it->second.listen)));
-                }
+                // Event is on the server listening socket: a new client is connecting
+                acceptNewConnections(epoll_fd, current_fd, manager_it->second);
             }
-            else
+            else if (cgi_it != cgiToClient.end())
             {
-                if (event_arr[i].events & EPOLLIN)
-                {
-                    it->second.lastActivity = time(NULL);
-
-                    if (it->second.request.isComplete())
-                    {
-                        // TODO: Determine if this request is a CGI request and get the CGI path.
-                        bool is_cgi = false; // Replace with your actual CGI check
-                        string cgi_path = ""; // Replace with your actual CGI path getter
-                        
-                        if (is_cgi) {
-                            it->second.response.prepareCGI(it->second, cgi_path);
-                            cgiToClient[it->second.to_cgi_fd] = it->first;
-                            cgiToClient[it->second.from_cgi_fd] = it->first;
-                        } else {
-                            change_epoll_event(epoll_fd, it->first, EPOLLOUT);
-                        }
-                    }
-					else if (it->second.request.parseRequest(it->first) == false)
-                    {
-                        disconnect_client(it->first, it->second);
-                        fds.erase(it);
-                        continue;
-                    }
-                }
-                else if (cgi_it != cgiToClient.end())
-                {
-                    // This event is for a CGI pipe (to_cgi_fd or from_cgi_fd)
-                    try {
-                        it->second.response.excuteCGI(it->second, current_fd, event_arr[i].events);
-                        if (it->second.cgi_state == FINISHED) {
-                            // CGI is done, clean up mappings and set client socket to EPOLLOUT
-                            cgiToClient.erase(it->second.to_cgi_fd);
-                            cgiToClient.erase(it->second.from_cgi_fd);
-                            change_epoll_event(epoll_fd, it->first, EPOLLOUT);
-                        }
-                    } catch (const HttpException& e) {
-                        it->second.response.buildErrorResponse(e, it->second.blockServer);
-                        cgiToClient.erase(it->second.to_cgi_fd);
-                        cgiToClient.erase(it->second.from_cgi_fd);
-                        change_epoll_event(epoll_fd, it->first, EPOLLOUT);
-                    }
-                }
-                else if (event_arr[i].events & EPOLLOUT)
-                {
-                    int ret = it->second.response.send_response(it->first);
-                    if (ret == -1)
-                    {
-                        disconnect_client(it->first, it->second);
-                        fds.erase(it);
-                        continue;
-                    }
-                    else if (ret == 1)
-                    {
-                        it->second.lastActivity = time(NULL);
-                        change_epoll_event(epoll_fd, it->first, EPOLLIN);
-                    }
-                    if (!it->second.request.isKeepAlive())
-                    {
-                        disconnect_client(it->first, it->second);
-                        fds.erase(it);
-                    }
-                }
+                // Event is on a CGI pipe (read or write is ready)
+                handleCgiEvent(epoll_fd, client_fd, current_fd, event_arr[i].events, manager_it);
+            }
+            else if (event_arr[i].events & EPOLLIN)
+            {
+                // Event is on a client socket, and it is ready to be read
+                handleClientInput(epoll_fd, client_fd, manager_it);
+            }
+            else if (event_arr[i].events & EPOLLOUT)
+            {
+                // Event is on a client socket, and it is ready to be written to
+                handleClientOutput(epoll_fd, client_fd, manager_it);
             }
         }
-        {
-            time_t currentTime = time(NULL);
-            for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); )
-            {
-                if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
-                {
-                    // cout << "Disconnecting client with fd = " << it->first << " because timeout = " << (currentTime - it->second.lastActivity) << endl;
-                    disconnect_client(it->first, it->second);
-                    map<int, FdManager>::iterator tmp = it++;
-                    fds.erase(tmp);
-                }
-                else
-                    it++;
-            }
-        }
+        
+        // Regularly check for inactive clients and disconnect them
+        handleClientTimeouts();
     }
 }
 

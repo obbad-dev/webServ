@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 HttpResponse::HttpResponse()
 {
@@ -110,6 +111,78 @@ void HttpResponse::buildErrorResponse(const HttpException &e, const Server &serv
 	response_body = content;
 }
 
+void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server& server)
+{
+	const vector<LocationConf>& locations = server.getLocations();
+	const LocationConf* matched_loc = NULL;
+	size_t max_match_len = 0;
+
+	for (size_t i = 0; i < locations.size(); ++i) {
+		const string& loc_path = locations[i].getPath();
+		if (request.getPath().find(loc_path) == 0 && loc_path.length() > max_match_len) {
+			matched_loc = &locations[i];
+			max_match_len = loc_path.length();
+		}
+	}
+
+	string root = server.getRoot();
+	if (matched_loc && matched_loc->rootIsSet()) {
+		root = matched_loc->getRoot();
+	}
+
+	string fullPath;
+	if (!realPath(root, request.getPath(), fullPath)) {
+		throw HttpException(STATUS_NOT_FOUND);
+	}
+
+	struct stat path_stat;
+	if (stat(fullPath.c_str(), &path_stat) != 0) {
+		throw HttpException(STATUS_NOT_FOUND);
+	}
+
+	if (S_ISDIR(path_stat.st_mode)) {
+		bool found_index = false;
+		vector<string> indices;
+		if (matched_loc && matched_loc->indexIsSet())
+			indices = matched_loc->getIndex();
+		else
+			indices = server.getIndex();
+
+		for (size_t i = 0; i < indices.size(); ++i) {
+			string index_path = fullPath;
+			if (index_path[index_path.length() - 1] != '/')
+				index_path += "/";
+			index_path += indices[i];
+
+			if (stat(index_path.c_str(), &path_stat) == 0 && S_ISREG(path_stat.st_mode)) {
+				fullPath = index_path;
+				found_index = true;
+				break;
+			}
+		}
+
+		if (!found_index) {
+			if (matched_loc && matched_loc->hasAutoindex()) {
+				// Autoindex is not fully implemented here
+				throw HttpException(STATUS_FORBIDDEN);
+			} else {
+				throw HttpException(STATUS_FORBIDDEN);
+			}
+		}
+	}
+
+	string content;
+	if (!read_content(content, fullPath)) {
+		throw HttpException(STATUS_FORBIDDEN); // Could be permission issue
+	}
+
+	status_code = 200;
+	message = "OK";
+	response_headers["Content-Type"] = getMimeType(fullPath, "text/plain");
+	response_headers["Content-Length"] = intToString(content.size());
+	response_body = content;
+}
+
 void HttpResponse::serializeResponse(string httpVersion)
 {
 	response_serialized.clear();
@@ -133,6 +206,71 @@ void HttpResponse::setResponseHeader(const std::string &key, const std::string &
 void HttpResponse::setResponseBody(const std::string &body)
 {
 	response_body = body;
+}
+
+void HttpResponse::parseCgiOutput()
+{
+	size_t header_end = response_body.find("\r\n\r\n");
+	size_t separator_len = 4;
+
+	if (header_end == std::string::npos)
+	{
+		header_end = response_body.find("\n\n");
+		separator_len = 2;
+	}
+
+	if (header_end != std::string::npos)
+	{
+		std::string headers_str = response_body.substr(0, header_end);
+		std::string new_body = response_body.substr(header_end + separator_len);
+
+		std::istringstream iss(headers_str);
+		std::string line;
+		while (std::getline(iss, line))
+		{
+			if (!line.empty() && line[line.size() - 1] == '\r')
+				line.erase(line.size() - 1);
+
+			if (line.empty())
+				continue;
+
+			size_t colon_pos = line.find(':');
+			if (colon_pos != std::string::npos)
+			{
+				std::string key = line.substr(0, colon_pos);
+				std::string value = line.substr(colon_pos + 1);
+
+				// Trim leading whitespace
+				size_t start = value.find_first_not_of(" \t");
+				if (start != std::string::npos)
+					value = value.substr(start);
+
+				if (key == "Status")
+				{
+					std::istringstream status_iss(value);
+					status_iss >> status_code;
+					std::getline(status_iss, message);
+					size_t msg_start = message.find_first_not_of(" \t");
+					if (msg_start != std::string::npos)
+						message = message.substr(msg_start);
+				}
+				else
+				{
+					response_headers[key] = value;
+				}
+			}
+		}
+
+		response_body = new_body;
+	}
+
+	if (status_code == 0)
+	{
+		status_code = 200;
+		message = "OK";
+	}
+
+	response_headers["Content-Length"] = intToString(response_body.size());
 }
 
 //? Getters

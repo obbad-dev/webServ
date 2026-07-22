@@ -4,6 +4,8 @@ using namespace std;
 #include <map>
 #include "HttpErrors.hpp"
 
+class Server;
+
 class HttpRequest
 {
 private:
@@ -66,5 +68,6 @@ public:
     void setProtocolVersion(string version);
 
     bool parseRequest(int clientFd);
+    bool isCgi(const Server& server, string& script_path) const;
 };
 
