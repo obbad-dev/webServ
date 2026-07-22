@@ -52,9 +52,7 @@ void HttpRequest::setMethod(string method){
     this->method = method;
 }
 void HttpRequest::setTarget(string target){
-    if (target.empty())
-        throw HttpException(ERR_INVALID_TARGET);
-	if (target[0] != '/')
+	if (target.empty() || target[0] != '/')
 		throw HttpException(ERR_INVALID_TARGET);
 	
 	size_t pos = target.find("?");

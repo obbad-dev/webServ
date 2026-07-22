@@ -58,7 +58,7 @@ struct FdManager
 		cgi_bytes_written = 0;
 		to_cgi_fd = -1;
 		from_cgi_fd = -1;
-		pid_t cgi_pid = -1;
+		// pid_t cgi_pid = -1;
     }
 };
 
@@ -70,7 +70,7 @@ private:
     map<int, int> cgiToClient;
     map<int, HttpRequest> httpRequests;
 
-    void debug();
+    // void debug();
     void acceptNewConnections(int epoll_fd, int server_fd, FdManager& serverManager);
     void handleClientInput(int epoll_fd, int client_fd, map<int, FdManager>::iterator& it);
     void handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_t events, map<int, FdManager>::iterator& it);

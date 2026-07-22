@@ -3,6 +3,7 @@
 #include <map>
 #include "Server.hpp"
 #include "HttpException.hpp"
+#include "HttpRequest.hpp"
 
 using namespace std;
 

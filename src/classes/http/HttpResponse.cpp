@@ -376,10 +376,11 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const string &cgiPath)
 			env[i] = const_cast<char *>(fdManager.env_vars[i].c_str());
 		}
 		env[fdManager.env_vars.size()] = NULL;
-		char *args[] = { "/usr/bin/python3",const_cast<char *>(cgiPath.c_str()), NULL};
+		char cmd[] = "/usr/bin/python3";
+		char *args[] = {cmd, const_cast<char *>(cgiPath.c_str()), NULL};
 		execve(args[0], args, env);
 		exit(127);
-	} 
+	}
 	else
 	{
 		close(to_cgi_fd[READ]);
