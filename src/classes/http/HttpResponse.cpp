@@ -310,6 +310,7 @@ int HttpResponse::send_response(int fd)
 		}
 		bytesSent += n;
 	}
+	init_bytes_var();
 	return 1;
 }
 void makeEnvVars(FdManager &fdManager)
@@ -391,8 +392,10 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const string &cgiPath)
 		fdManager.cgi_pid = pid;
 		
 		ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.from_cgi_fd, EPOLLIN);
-		if (fdManager.request.getBodyContent().empty())
+		if (fdManager.request.getBodyContent().empty()){
 			close(fdManager.to_cgi_fd);
+			fdManager.to_cgi_fd = -1;
+		}
 		else
 			ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.to_cgi_fd, EPOLLOUT);
 	}
@@ -427,7 +430,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 			{
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
 				close(fdManager.to_cgi_fd);
-				fdManager.to_cgi_fd = -1;
+				fdManager.stat_fd_to_cgi = FINISHED;
 			}
 		}
     }
@@ -451,7 +454,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 		{
 			ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
 			close(fdManager.from_cgi_fd);
-			fdManager.from_cgi_fd = -1;
+			fdManager.stat_fd_from_cgi = FINISHED;
 			fdManager.cgi_state = FINISHED;
 			int status;
 			waitpid(fdManager.cgi_pid, &status, 0);

@@ -10,7 +10,7 @@ ParseConfig::ParseConfig(std::string configFile) : _configFile(configFile)
 {
     tokenize();
     parse();
-    cout << "Configuration file parsed successfully." << endl;
+    // cout << "Configuration file parsed successfully." << endl;
 }
 ParseConfig::~ParseConfig()
 {
