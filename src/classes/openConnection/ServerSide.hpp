@@ -36,7 +36,7 @@ struct FdManager
     const Server &blockServer;
 	std::vector<std::string> env_vars;// Array to hold environment variables for CGI
 	
-    int &epollFd;
+    int epollFd;
     static map<string, string> extensions;
 
 	int to_cgi_fd;

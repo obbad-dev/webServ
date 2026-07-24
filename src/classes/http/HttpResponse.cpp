@@ -413,6 +413,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 		{
 			if (errno != EAGAIN && errno != EWOULDBLOCK)
 			{
+				cout << "first remove epoll\n";
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
 				close(fdManager.to_cgi_fd);
 				fdManager.to_cgi_fd = -1;
@@ -425,6 +426,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 
 			if (fdManager.cgi_bytes_written == body.size())
 			{
+				cout << "second remove epoll\n";
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
 				close(fdManager.to_cgi_fd);
 				fdManager.to_cgi_fd = -1;
@@ -440,6 +442,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 		{
 			if (errno != EAGAIN && errno != EWOULDBLOCK)
 			{
+				cout << "third remove epoll\n";
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
 				close(fdManager.from_cgi_fd);
 				fdManager.from_cgi_fd = -1;
@@ -449,6 +452,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 		}
 		else if (n == 0)
 		{
+			cout << "fourth remove epoll\n";
 			ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
 			close(fdManager.from_cgi_fd);
 			fdManager.from_cgi_fd = -1;

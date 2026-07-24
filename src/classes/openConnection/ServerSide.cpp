@@ -123,6 +123,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
         if (it->second.request.parseRequest(client_fd) == false)
         {
             // Parsing failed or client disconnected
+            cout << "fifth remove epoll\n";
             disconnect_client(client_fd, it->second);
             fds.erase(it);
             return;
@@ -196,6 +197,7 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
     if (ret == -1)
     {
         // Connection error while sending
+        cout << "sixth remove epoll\n";
         disconnect_client(client_fd, it->second);
         fds.erase(it);
     }
@@ -210,6 +212,7 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
         if (!it->second.request.isKeepAlive())
         {
             // If the client requested Connection: close, disconnect immediately
+            cout << "seventh remove epoll\n";
             disconnect_client(client_fd, it->second);
             fds.erase(it);
         }
@@ -225,6 +228,7 @@ void ServerSide::handleClientTimeouts()
         // Check if the connection has been idle longer than the allowed TIMEOUT
         if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
         {
+            cout << "eighth remove epoll\n";
             disconnect_client(it->first, it->second);
             map<int, FdManager>::iterator tmp = it++;
             fds.erase(tmp);
