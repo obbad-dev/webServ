@@ -50,7 +50,6 @@ struct FdManager {
       : listen(_listen), blockServer(_blockServer), epollFd(_epollFd) {
     type = _type;
     lastActivity = _lastActivity;
-    response.init_bytes_var();
     cgi_finished = false;
     cgi_state = NOT_FINISHED;
 	stat_fd_to_cgi = NOT_FINISHED;

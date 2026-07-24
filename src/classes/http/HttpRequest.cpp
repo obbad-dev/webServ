@@ -290,7 +290,7 @@ bool HttpRequest::isCgi(const Server& server, string& script_path) const
     size_t dot_pos = path.find_last_of('.');
     if (dot_pos == string::npos) return false;
     string ext = path.substr(dot_pos);
-	cout << "EXTENSION: " << ext << endl;
+	// cout << "EXTENSION: " << ext << endl;
 
     const vector<LocationConf>& locations = server.getLocations();
     const LocationConf* matched_loc = NULL;

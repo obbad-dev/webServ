@@ -13,6 +13,7 @@
 HttpResponse::HttpResponse()
 {
 	status_code = 0;
+	bytesSent = 0;
 	message = "";
 }
 
@@ -179,6 +180,7 @@ void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server&
 	status_code = 200;
 	message = "OK";
 	response_headers["Content-Type"] = getMimeType(fullPath, "text/plain");
+	// cout << "Content-Type: " << response_headers["Content-Type"] << endl;
 	response_headers["Content-Length"] = intToString(content.size());
 	response_body = content;
 }
@@ -295,13 +297,22 @@ void HttpResponse::setStatusCode(int status_code)
 	this->status_code = status_code;
 }
 
-void HttpResponse::init_bytes_var() { bytesSent = 0; }
+void HttpResponse::resetObjectResponse() {
+	response_serialized.clear();
+	status_code = 0;
+	message.clear();
+	response_headers.clear();
+	response_body.clear();
+	bytesSent = 0; 
+}
 
 int HttpResponse::send_response(int fd)
 {
 	while (bytesSent < response_serialized.size())
 	{
+		// cout << "before send\n";
 		ssize_t n = send(fd, (response_serialized.data() + bytesSent), (response_serialized.size() - bytesSent), 0);
+		// cout << response_serialized << "\n";
 		if (n == -1)
 		{
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -310,7 +321,8 @@ int HttpResponse::send_response(int fd)
 		}
 		bytesSent += n;
 	}
-	init_bytes_var();
+	// if (bytesSent == response_serialized.size())
+	// 	resetObjectResponse();
 	return 1;
 }
 void makeEnvVars(FdManager &fdManager)
@@ -418,7 +430,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 			{
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
 				close(fdManager.to_cgi_fd);
-				fdManager.to_cgi_fd = -1;
+				fdManager.stat_fd_to_cgi = FINISHED;
 				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 			}
 		}
@@ -445,7 +457,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 			{
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
 				close(fdManager.from_cgi_fd);
-				fdManager.from_cgi_fd = -1;
+				fdManager.stat_fd_from_cgi = FINISHED;
 				fdManager.cgi_state = FINISHED;
 				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 			}

@@ -45,5 +45,5 @@ public:
 	static void excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events);
 	void parseCgiOutput();
 	int send_response(int fd);
-	void init_bytes_var();
+	void resetObjectResponse();
 };
