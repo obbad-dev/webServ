@@ -101,7 +101,7 @@ void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager& se
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
-            return; // Other errors can be ignored for now, just break loop
+            return;
         }
 
         if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
@@ -125,7 +125,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
             // Parsing failed or client disconnected
             cout << "fifth remove epoll\n";
             disconnect_client(client_fd, it->second);
-            fds.erase(it);
+            fds.erase(client_fd);
             return;
         }
 
@@ -138,14 +138,17 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
             if (is_cgi) {
                 // Prepare pipes and fork the CGI process
                 it->second.response.prepareCGI(it->second, cgi_path);
-                
+        
                 // Map both ends of the CGI pipe back to this client's file descriptor
-                cgiToClient[it->second.to_cgi_fd] = client_fd;
-                cgiToClient[it->second.from_cgi_fd] = client_fd;
+				if (it->second.to_cgi_fd != -1)
+                	cgiToClient[it->second.to_cgi_fd] = client_fd;
+				if (it->second.from_cgi_fd != -1)
+                	cgiToClient[it->second.from_cgi_fd] = client_fd;
             } else {
                 // It's a static file request. We need to build the static response here.
                 it->second.response.buildStaticResponse(it->second.request, it->second.blockServer);
-                it->second.response.serializeResponse("HTTP/1.1");
+                it->second.response.serializeResponse(it->second.request.getProtocolVersion());
+				it->second.request.resetRequest();
 
                 // Once the response is built, we wait for the socket to be writable
                 change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
@@ -154,7 +157,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
     } catch (const HttpException& e) {
         // Handle any errors thrown during parsing or building the response
         it->second.response.buildErrorResponse(e, it->second.blockServer);
-        it->second.response.serializeResponse("HTTP/1.1");
+        it->second.response.serializeResponse(it->second.request.getProtocolVersion());
         change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
     }
 }
@@ -164,18 +167,23 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
     try {
         // Execute CGI read or write operations based on the event and triggered FD
         it->second.response.excuteCGI(it->second, cgi_fd, events);
-        
+		
+		if (it->second.stat_fd_to_cgi == FINISHED ) {
+			cgiToClient.erase(it->second.to_cgi_fd);
+			it->second.to_cgi_fd = -1;
+		}
+		if (it->second.stat_fd_from_cgi == FINISHED) {
+			cgiToClient.erase(it->second.from_cgi_fd);
+			it->second.from_cgi_fd = -1;
+		}
+		
         // If the CGI process has completely finished (both pipes closed and process reaped)
         if (it->second.cgi_state == FINISHED) {
-            // Clean up the pipe-to-client mappings
-            cgiToClient.erase(it->second.to_cgi_fd);
-            cgiToClient.erase(it->second.from_cgi_fd);
-            
             // 1. Parse the raw CGI output to extract headers and the real body
             it->second.response.parseCgiOutput();
             
             // 2. Build the final HTTP response string
-            it->second.response.serializeResponse("HTTP/1.1");
+            it->second.response.serializeResponse(it->second.request.getProtocolVersion());
             
             // 3. Now we tell epoll we are ready to send it to the client
             change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
@@ -185,7 +193,13 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         cgiToClient.erase(it->second.to_cgi_fd);
         cgiToClient.erase(it->second.from_cgi_fd);
-        change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
+		it->second.stat_fd_to_cgi = NOT_FINISHED;
+		it->second.stat_fd_from_cgi = NOT_FINISHED;
+		it->second.to_cgi_fd = -1;
+		it->second.from_cgi_fd = -1;
+		it->second.cgi_state = NOT_FINISHED;
+		it->second.response.serializeResponse(it->second.request.getProtocolVersion());
+		change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
     }
 }
 
@@ -193,13 +207,14 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
 {
     // Attempt to send the serialized HTTP response over the socket
     int ret = it->second.response.send_response(client_fd);
+	// cout << "Sent response to client_fd: " << client_fd << ", ret: " << ret << endl;
     
     if (ret == -1)
     {
         // Connection error while sending
         cout << "sixth remove epoll\n";
         disconnect_client(client_fd, it->second);
-        fds.erase(it);
+        fds.erase(client_fd);
     }
     else if (ret == 1)
     {
@@ -208,7 +223,6 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
         
         // Switch back to listening for new requests on this connection (Keep-Alive)
         change_epoll_event(epoll_fd, client_fd, EPOLLIN);
-        
         if (!it->second.request.isKeepAlive())
         {
             // If the client requested Connection: close, disconnect immediately
@@ -262,7 +276,6 @@ void ServerSide::communication_part()
 
         if (epoll_ready == -1)
             throw runtime_error("Epoll wait failed");
-            
         for (int i = 0; i < epoll_ready; i++)
         {
             int current_fd = event_arr[i].data.fd;
@@ -282,19 +295,25 @@ void ServerSide::communication_part()
             }
             else if (cgi_it != cgiToClient.end())
             {
+				cout << "CGI event on client_fd: " << client_fd << ", cgi_fd: " << current_fd << endl;
                 // Event is on a CGI pipe (read or write is ready)
                 handleCgiEvent(epoll_fd, client_fd, current_fd, event_arr[i].events, manager_it);
             }
             else if (event_arr[i].events & EPOLLIN)
             {
+				// cout << "EPOLLIN event on client_fd: " << client_fd << endl;
                 // Event is on a client socket, and it is ready to be read
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
             else if (event_arr[i].events & EPOLLOUT)
             {
+				// cout << "connection from fd: " << client_fd << " and keep-alive: " << manager_it->second.request.isKeepAlive() << "\n";
+				// cout << "EPOLLOUT event on client_fd: " << client_fd << endl;
                 // Event is on a client socket, and it is ready to be written to
                 handleClientOutput(epoll_fd, client_fd, manager_it);
+				// cout << "After handleClientOutput, client_fd: " << client_fd << endl;
             }
+			// sleep (1);
         }
         
         // Regularly check for inactive clients and disconnect them

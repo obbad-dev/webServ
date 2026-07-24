@@ -101,12 +101,10 @@ void HttpRequest::determineConnectionStatus()
     {
         if (headers["connection"] == "keep-alive")
             _keep_alive = true;
-        else if(protocolVersion == "HTTP/1.1")
-            _keep_alive = true;
-    }
-    else if (protocolVersion == "HTTP/1.1")
-    {
-        _keep_alive = true;
+	}
+	else if (protocolVersion == "HTTP/1.1")
+	{
+		_keep_alive = true;
     }
 }
 
@@ -252,6 +250,7 @@ bool HttpRequest::parseRequest(int clientFd){
         raw_buffer.erase(0, end_headers + 4);
         headers_parsed = true;
         setBodyType();
+		determineConnectionStatus();
     }
     // TODO: Step 3: Parse body if headers are parsed but request is not complete
     if (headers_parsed && !is_complete)
@@ -273,24 +272,25 @@ bool HttpRequest::parseRequest(int clientFd){
 
 
 
-void HttpRequest::debug()
-{
-    cout << "Method: " << this->method << '\n';
-    cout << "Target: " << this->path << '\n';
-    cout << "Protocol: " << this->protocolVersion << '\n';
-    cout << "------------Headers-----------" << '\n';
-    for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
-        cout << it->first << ": " << it->second << '\n';
-    cout << "------------Body-----------" << '\n';
-    cout << this->bodyContent << '\n';
-    cout << "------------------------------------" << '\n';
-}
+// void HttpRequest::debug()
+// {
+//     cout << "Method: " << this->method << '\n';
+//     cout << "Target: " << this->path << '\n';
+//     cout << "Protocol: " << this->protocolVersion << '\n';
+//     cout << "------------Headers-----------" << '\n';
+//     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+//         cout << it->first << ": " << it->second << '\n';
+//     cout << "------------Body-----------" << '\n';
+//     cout << this->bodyContent << '\n';
+//     cout << "------------------------------------" << '\n';
+// }
 
 bool HttpRequest::isCgi(const Server& server, string& script_path) const
 {
     size_t dot_pos = path.find_last_of('.');
     if (dot_pos == string::npos) return false;
     string ext = path.substr(dot_pos);
+	// cout << "EXTENSION: " << ext << endl;
 
     const vector<LocationConf>& locations = server.getLocations();
     const LocationConf* matched_loc = NULL;
