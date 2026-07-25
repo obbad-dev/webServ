@@ -149,7 +149,6 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
             else
             {
                 it->second.response.buildStaticResponse(it->second);
-                // it->second.response.serializeResponse(it->second.request.getProtocolVersion());
 
                 change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
             }
@@ -157,6 +156,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
     }
     catch (const HttpException& e)
     {
+        std::cout << "DEBUG: caught HttpException in handleClientInput!\n";
         // Handle any errors thrown during parsing or building the response
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         it->second.response.serializeResponse(it->second.request.getProtocolVersion());
@@ -170,7 +170,9 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
     {
         // Execute CGI read or write operations based on the event and triggered FD
         it->second.response.excuteCGI(it->second, cgi_fd, events);
-		
+		// cout << "cgi state from: " << it->second.stat_fd_from_cgi << '\n';
+
+		// cout << "cgi state to: " << it->second.stat_fd_to_cgi << '\n';
 		if (it->second.stat_fd_to_cgi == FINISHED )
         {
 			cgiToClient.erase(it->second.to_cgi_fd);
@@ -194,6 +196,7 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
     }
     catch (const HttpException& e)
     {
+        std::cout << "DEBUG: caught HttpException in handleCgiEvent!\n";
         // If the CGI process fails, build an HTTP error response (e.g. 500)
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         cgiToClient.erase(it->second.to_cgi_fd);
@@ -301,6 +304,7 @@ void ServerSide::communication_part()
             }
             else if (event_arr[i].events & EPOLLIN)
             {
+				// cout << "EPOLLIN event for client_fd: " << client_fd << '\n';
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
             else if (event_arr[i].events & EPOLLOUT)

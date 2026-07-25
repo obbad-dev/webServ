@@ -1,3 +1,4 @@
+// #include <iostream>
 #include "HttpResponse.hpp"
 #include "ServerSide.hpp"
 #include "helperFunc.hpp"
@@ -90,6 +91,7 @@ bool read_content(string &content, string &path)
 
 void HttpResponse::buildErrorResponse(const HttpException &e, const Server &server)
 {
+	// std::cout << "DEBUG: buildErrorResponse called with status " << e.getStatusCode() << std::endl;
 	string content;
 	bool founErroPage = false;
 

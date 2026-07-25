@@ -71,7 +71,7 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const string &cgiPath)
 			env[i] = const_cast<char *>(fdManager.env_vars[i].c_str());
 		}
 		env[fdManager.env_vars.size()] = NULL;
-		char cmd[] = "/usr/bin";
+		char cmd[] = "/usr/bin/python3";
 		char *args[] = {cmd, const_cast<char *>(cgiPath.c_str()), NULL};
 		execve(args[0], args, env);
 		exit(127);
@@ -90,8 +90,9 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const string &cgiPath)
 			close(fdManager.to_cgi_fd);
 			fdManager.to_cgi_fd = -1;
 		}
-		else
+		else{
 			ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.to_cgi_fd, EPOLLOUT);
+		}
 	}
 }
 
@@ -141,6 +142,7 @@ static void handleCGIRead(FdManager &fdManager)
 	{
 		if (errno != EAGAIN && errno != EWOULDBLOCK)
 		{
+			// std::cout << "DEBUG: read returned -1, errno=" << errno << '\n';
 			finishCgiRead(fdManager);
 			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 		}
@@ -149,23 +151,50 @@ static void handleCGIRead(FdManager &fdManager)
 	
 	if (bytes_read == 0)
 	{
+		// std::cout << "DEBUG: read returned 0 (EOF)\n";
 		finishCgiRead(fdManager);
 		int status;
 		waitpid(fdManager.cgi_pid, &status, 0);
-		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+			// std::cout << "DEBUG: waitpid status error! WIFEXITED=" << WIFEXITED(status) << ", WEXITSTATUS=" << WEXITSTATUS(status) << '\n';
 			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+		}
+		// std::cout << "DEBUG: waitpid succeeded!\n";
 		return;
 	}
 
+	// std::cout << "DEBUG: bytes_read=" << bytes_read << '\n';
 	HttpResponse &response = fdManager.response;
 	response.setResponseBody(response.getResponseBody() + std::string(buffer, bytes_read));
 }
 
 void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events)
 {
+	// cout << "Triggered FD: " << triggered_fd << ", Events: " << (events & EPOLLOUT) << '\n';
+	// cout << "to_cgi_fd: " << fdManager.to_cgi_fd << ", from_cgi_fd: " << fdManager.from_cgi_fd << '\n';
+ 	// Suppress unused variable warning
+	if (triggered_fd == fdManager.to_cgi_fd && (events & (EPOLLERR | EPOLLHUP)))
+	{
+		finishCgiWrite(fdManager);
+		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+	}
+	
+	if (triggered_fd == fdManager.from_cgi_fd && (events & EPOLLERR))
+	{
+		finishCgiRead(fdManager);
+		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+	}
+	
 	if (triggered_fd == fdManager.to_cgi_fd && (events & EPOLLOUT))
+	{
+		// cout << "cgi state to: " << fdManager.stat_fd_to_cgi << '\n';
 		handleCGIWrite(fdManager);
+	}
 
-	if (triggered_fd == fdManager.from_cgi_fd && (events & EPOLLIN))
+	if (triggered_fd == fdManager.from_cgi_fd && (events & (EPOLLIN | EPOLLHUP)))
+	{
+		// cout << "cgi state from: " << fdManager.stat_fd_from_cgi << '\n';
 		handleCGIRead(fdManager);
+	}
+	// exit(0);
 }
