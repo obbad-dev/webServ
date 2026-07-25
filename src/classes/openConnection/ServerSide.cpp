@@ -135,7 +135,8 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
             string cgi_path = ""; 
             bool is_cgi = it->second.request.isCgi(it->second.blockServer, cgi_path);
             
-            if (is_cgi) {
+            if (is_cgi)
+            {
                 // Prepare pipes and fork the CGI process
                 it->second.response.prepareCGI(it->second, cgi_path);
         
@@ -144,16 +145,18 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
                 	cgiToClient[it->second.to_cgi_fd] = client_fd;
 				if (it->second.from_cgi_fd != -1)
                 	cgiToClient[it->second.from_cgi_fd] = client_fd;
-            } else {
-                // It's a static file request. We need to build the static response here.
-                it->second.response.buildStaticResponse(it->second.request, it->second.blockServer);
-                it->second.response.serializeResponse(it->second.request.getProtocolVersion());
+            }
+            else
+            {
+                it->second.response.buildStaticResponse(it->second);
+                // it->second.response.serializeResponse(it->second.request.getProtocolVersion());
 
-                // Once the response is built, we wait for the socket to be writable
                 change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
             }
         }
-    } catch (const HttpException& e) {
+    }
+    catch (const HttpException& e)
+    {
         // Handle any errors thrown during parsing or building the response
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         it->second.response.serializeResponse(it->second.request.getProtocolVersion());
@@ -163,21 +166,25 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
 
 void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_t events, map<int, FdManager>::iterator& it)
 {
-    try {
+    try
+    {
         // Execute CGI read or write operations based on the event and triggered FD
         it->second.response.excuteCGI(it->second, cgi_fd, events);
 		
-		if (it->second.stat_fd_to_cgi == FINISHED ) {
+		if (it->second.stat_fd_to_cgi == FINISHED )
+        {
 			cgiToClient.erase(it->second.to_cgi_fd);
 			it->second.to_cgi_fd = -1;
 		}
-		if (it->second.stat_fd_from_cgi == FINISHED) {
+		if (it->second.stat_fd_from_cgi == FINISHED)
+        {
 			cgiToClient.erase(it->second.from_cgi_fd);
 			it->second.from_cgi_fd = -1;
 		}
 		
         // If the CGI process has completely finished (both pipes closed and process reaped)
-        if (it->second.cgi_state == FINISHED) {
+        if (it->second.cgi_state == FINISHED)
+        {
             // 1. Parse the raw CGI output to extract headers and the real body
             it->second.response.parseCgiOutput();
             
@@ -187,7 +194,9 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
             // 3. Now we tell epoll we are ready to send it to the client
             change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
         }
-    } catch (const HttpException& e) {
+    }
+    catch (const HttpException& e)
+    {
         // If the CGI process fails, build an HTTP error response (e.g. 500)
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         cgiToClient.erase(it->second.to_cgi_fd);
