@@ -123,7 +123,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
         if (it->second.request.parseRequest(client_fd) == false)
         {
             // Parsing failed or client disconnected
-            cout << "fifth remove epoll\n";
+            // cout << "fifth remove epoll\n";
             disconnect_client(client_fd, it->second);
             fds.erase(client_fd);
             return;
@@ -148,7 +148,6 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
                 // It's a static file request. We need to build the static response here.
                 it->second.response.buildStaticResponse(it->second.request, it->second.blockServer);
                 it->second.response.serializeResponse(it->second.request.getProtocolVersion());
-				it->second.request.resetRequest();
 
                 // Once the response is built, we wait for the socket to be writable
                 change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
@@ -207,12 +206,11 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
 {
     // Attempt to send the serialized HTTP response over the socket
     int ret = it->second.response.send_response(client_fd);
-	// cout << "Sent response to client_fd: " << client_fd << ", ret: " << ret << endl;
     
     if (ret == -1)
     {
         // Connection error while sending
-        cout << "sixth remove epoll\n";
+        // cout << "sixth remove epoll\n";
         disconnect_client(client_fd, it->second);
         fds.erase(client_fd);
     }
@@ -226,12 +224,13 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
         if (!it->second.request.isKeepAlive())
         {
             // If the client requested Connection: close, disconnect immediately
-            cout << "seventh remove epoll\n";
+            // cout << "seventh remove epoll with fd: " << ;
             disconnect_client(client_fd, it->second);
             fds.erase(it);
         }
+        it->second.request.resetRequest();
+        it->second.response.resetObjectResponse();
     }
-    // If ret == 0, it means EAGAIN (socket buffer full). We do nothing and wait for next EPOLLOUT.
 }
 
 void ServerSide::handleClientTimeouts()
@@ -242,7 +241,7 @@ void ServerSide::handleClientTimeouts()
         // Check if the connection has been idle longer than the allowed TIMEOUT
         if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
         {
-            cout << "eighth remove epoll\n";
+            // cout << "eighth remove epoll\n";
             disconnect_client(it->first, it->second);
             map<int, FdManager>::iterator tmp = it++;
             fds.erase(tmp);
@@ -295,25 +294,20 @@ void ServerSide::communication_part()
             }
             else if (cgi_it != cgiToClient.end())
             {
-				cout << "CGI event on client_fd: " << client_fd << ", cgi_fd: " << current_fd << endl;
+				// cout << "CGI event on client_fd: " << client_fd << ", cgi_fd: " << current_fd << endl;
                 // Event is on a CGI pipe (read or write is ready)
                 handleCgiEvent(epoll_fd, client_fd, current_fd, event_arr[i].events, manager_it);
             }
             else if (event_arr[i].events & EPOLLIN)
             {
-				// cout << "EPOLLIN event on client_fd: " << client_fd << endl;
                 // Event is on a client socket, and it is ready to be read
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
             else if (event_arr[i].events & EPOLLOUT)
             {
-				// cout << "connection from fd: " << client_fd << " and keep-alive: " << manager_it->second.request.isKeepAlive() << "\n";
-				// cout << "EPOLLOUT event on client_fd: " << client_fd << endl;
                 // Event is on a client socket, and it is ready to be written to
                 handleClientOutput(epoll_fd, client_fd, manager_it);
-				// cout << "After handleClientOutput, client_fd: " << client_fd << endl;
             }
-			// sleep (1);
         }
         
         // Regularly check for inactive clients and disconnect them

@@ -310,9 +310,7 @@ int HttpResponse::send_response(int fd)
 {
 	while (bytesSent < response_serialized.size())
 	{
-		// cout << "before send\n";
 		ssize_t n = send(fd, (response_serialized.data() + bytesSent), (response_serialized.size() - bytesSent), 0);
-		// cout << response_serialized << "\n";
 		if (n == -1)
 		{
 			if (errno == EAGAIN || errno == EWOULDBLOCK)
@@ -321,10 +319,9 @@ int HttpResponse::send_response(int fd)
 		}
 		bytesSent += n;
 	}
-	// if (bytesSent == response_serialized.size())
-	// 	resetObjectResponse();
 	return 1;
 }
+
 void makeEnvVars(FdManager &fdManager)
 {
 	vector<string> &env_vars = fdManager.env_vars;
@@ -428,7 +425,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 		{
 			if (errno != EAGAIN && errno != EWOULDBLOCK)
 			{
-				cout << "first remove epoll\n";
+				// cout << "first remove epoll\n";
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
 				close(fdManager.to_cgi_fd);
 				fdManager.stat_fd_to_cgi = FINISHED;
@@ -441,7 +438,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 
 			if (fdManager.cgi_bytes_written == body.size())
 			{
-				cout << "second remove epoll\n";
+				// cout << "second remove epoll\n";
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
 				close(fdManager.to_cgi_fd);
 				fdManager.stat_fd_to_cgi = FINISHED;
@@ -457,7 +454,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 		{
 			if (errno != EAGAIN && errno != EWOULDBLOCK)
 			{
-				cout << "third remove epoll\n";
+				// cout << "third remove epoll\n";
 				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
 				close(fdManager.from_cgi_fd);
 				fdManager.stat_fd_from_cgi = FINISHED;
@@ -467,7 +464,7 @@ void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t ev
 		}
 		else if (n == 0)
 		{
-			cout << "fourth remove epoll\n";
+			// cout << "fourth remove epoll\n";
 			ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
 			close(fdManager.from_cgi_fd);
 			fdManager.stat_fd_from_cgi = FINISHED;

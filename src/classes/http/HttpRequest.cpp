@@ -125,6 +125,7 @@ string HttpRequest::readRequest(int& clientFd)
         if (errno != EAGAIN && errno != EWOULDBLOCK )
             throw HttpException(ERR_READ);
     }
+    // cout << buffer << "\n";
     return buffer;
 }
 
