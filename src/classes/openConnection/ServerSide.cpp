@@ -260,7 +260,6 @@ void ServerSide::communication_part()
     if (epoll_fd == -1)
         throw runtime_error("Epoll creation failed");
 
-    // Add all server listening sockets to epoll
     for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
     {
         add_fd_to_epoll(epoll_fd, it->first, EPOLLIN);
@@ -268,52 +267,51 @@ void ServerSide::communication_part()
 
     struct epoll_event event_arr[1024];
 
-    while (true)
+    while (!sig)
     {
-        // Wait for an event on any of the monitored file descriptors (timeout 1000ms)
         int epoll_ready = epoll_wait(epoll_fd, event_arr, 1024, 1000);
 
         if (epoll_ready == -1)
+        {
+            if (errno == EINTR)
+                continue;
             throw runtime_error("Epoll wait failed");
+        }
+
         for (int i = 0; i < epoll_ready; i++)
         {
             int current_fd = event_arr[i].data.fd;
-            
-            // Check if the triggered fd is a CGI pipe. If so, map it to its client connection.
+
             map<int, int>::iterator cgi_it = cgiToClient.find(current_fd);
             int client_fd = (cgi_it != cgiToClient.end()) ? cgi_it->second : current_fd;
-            
-            // Find the state manager for this connection
+
             map<int, FdManager>::iterator manager_it = fds.find(client_fd);
             if (manager_it == fds.end())
 				continue;
             if (manager_it->second.type == SERVER)
             {
-                // Event is on the server listening socket: a new client is connecting
                 acceptNewConnections(epoll_fd, current_fd, manager_it->second);
             }
             else if (cgi_it != cgiToClient.end())
             {
-				// cout << "CGI event on client_fd: " << client_fd << ", cgi_fd: " << current_fd << endl;
-                // Event is on a CGI pipe (read or write is ready)
                 handleCgiEvent(epoll_fd, client_fd, current_fd, event_arr[i].events, manager_it);
             }
             else if (event_arr[i].events & EPOLLIN)
             {
-				//? i start from here
-                // Event is on a client socket, and it is ready to be read
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
             else if (event_arr[i].events & EPOLLOUT)
             {
-                // Event is on a client socket, and it is ready to be written to
                 handleClientOutput(epoll_fd, client_fd, manager_it);
             }
         }
-        
-        // Regularly check for inactive clients and disconnect them
+
         handleClientTimeouts();
     }
+
+    close (epoll_fd);
+    for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
+        close (it->first);
 }
 
 map<string, string> FdManager::extensions;

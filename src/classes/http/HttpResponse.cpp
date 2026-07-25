@@ -66,19 +66,19 @@ std::string HttpResponse::getDefaultErrorPage(int statusCode, std::string messag
 
 bool read_content(string &content, string &path)
 {
-	ifstream file(path.c_str());
+	ifstream file(path.c_str(), std::ios::binary);
+
 	if (!file.is_open())
 		return false;
 
-	string tmp_content;
-	while (1)
-	{
-		getline(file, tmp_content);
-		content += tmp_content;
-		if (file.eof())
-			break;
-		content += "\n";
-	}
+    std::ostringstream tmp;
+    tmp << file.rdbuf();
+
+    if (file.bad())
+        return false;
+
+    content = tmp.str();
+
 	return true;
 }
 
@@ -134,7 +134,8 @@ void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server&
 		throw HttpException(STATUS_NOT_FOUND);
 	}
 
-	if (S_ISDIR(path_stat.st_mode)) {
+	if (S_ISDIR(path_stat.st_mode))
+	{
 		bool found_index = false;
 		vector<string> indices;
 		if (matched_loc && matched_loc->indexIsSet())
@@ -142,38 +143,39 @@ void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server&
 		else
 			indices = server.getIndex();
 
-		for (size_t i = 0; i < indices.size(); ++i) {
+		for (size_t i = 0; i < indices.size(); ++i)
+		{
 			string index_path = fullPath;
 			if (index_path[index_path.length() - 1] != '/')
 				index_path += "/";
 			index_path += indices[i];
 
-			if (stat(index_path.c_str(), &path_stat) == 0 && S_ISREG(path_stat.st_mode)) {
+			if (stat(index_path.c_str(), &path_stat) == 0 && S_ISREG(path_stat.st_mode))
+			{
 				fullPath = index_path;
 				found_index = true;
 				break;
 			}
 		}
 
-		if (!found_index) {
-			if (matched_loc && matched_loc->hasAutoindex()) {
-				// Autoindex is not fully implemented here
+		if (!found_index)
+		{
+			if (matched_loc && matched_loc->hasAutoindex())
 				throw HttpException(STATUS_FORBIDDEN);
-			} else {
+			else
 				throw HttpException(STATUS_FORBIDDEN);
-			}
 		}
 	}
 
 	string content;
-	if (!read_content(content, fullPath)) {
+	if (!read_content(content, fullPath))
+	{
 		throw HttpException(STATUS_FORBIDDEN); // Could be permission issue
 	}
 
 	status_code = 200;
 	message = "OK";
 	response_headers["Content-Type"] = getMimeType(fullPath, "text/plain");
-	// cout << "Content-Type: " << response_headers["Content-Type"] << endl;
 	response_headers["Content-Length"] = intToString(content.size());
 	response_body = content;
 }
