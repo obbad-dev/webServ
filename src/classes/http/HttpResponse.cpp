@@ -69,13 +69,19 @@ bool read_content(string &content, string &path)
 	ifstream file(path.c_str(), std::ios::binary);
 
 	if (!file.is_open())
+	{
+		// cout << "problem open\n";
 		return false;
+	}
 
     std::ostringstream tmp;
     tmp << file.rdbuf();
 
     if (file.bad())
+	{
+		// cout << "problem bad\n";
         return false;
+	}
 
     content = tmp.str();
 
@@ -112,72 +118,326 @@ void HttpResponse::buildErrorResponse(const HttpException &e, const Server &serv
 	response_body = content;
 }
 
-void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server& server)
+// void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server& server)
+// {
+	// const vector<LocationConf>& locations = server.getLocations();
+	// const LocationConf* matched_loc = NULL;
+	// matched_loc = getMatchingLocation(locations, request.getPath());
+
+	// string root = server.getRoot();
+	// if (matched_loc) {
+	// 	root = matched_loc->getRoot();
+	// }
+
+	// string fullPath;
+	// if (!realPath(root, request.getPath(), fullPath)) {
+	// 	throw HttpException(STATUS_NOT_FOUND);
+	// }
+	// // /resources/portfolio/index.html/index.html
+	// // cout << "fullPath: " << fullPath << endl;
+	// struct stat path_stat;
+	// if (stat(fullPath.c_str(), &path_stat) != 0) {
+	// 	throw HttpException(STATUS_NOT_FOUND);
+	// }
+
+	// if (S_ISDIR(path_stat.st_mode))
+	// {
+	// 	bool found_index = false;
+	// 	vector<string> indices;
+	// 	if (matched_loc && matched_loc->indexIsSet())
+	// 		indices = matched_loc->getIndex();
+	// 	else
+	// 		indices = server.getIndex();
+
+	// 	for (size_t i = 0; i < indices.size(); ++i)
+	// 	{
+	// 		string index_path = fullPath;
+	// 		if (index_path[index_path.length() - 1] != '/')
+	// 			index_path += "/";
+	// 		index_path += indices[i];
+
+	// 		if (stat(index_path.c_str(), &path_stat) == 0 && S_ISREG(path_stat.st_mode))
+	// 		{
+	// 			fullPath = index_path;
+	// 			found_index = true;
+	// 			break;
+	// 		}
+	// 	}
+
+	// 	if (!found_index)
+	// 	{
+	// 		if (matched_loc && matched_loc->hasAutoindex())
+	// 			throw HttpException(STATUS_FORBIDDEN);
+	// 		else
+	// 			throw HttpException(STATUS_FORBIDDEN);
+	// 	}
+	// }
+
+	// string content;
+	// if (!read_content(content, fullPath))
+	// {
+	// 	throw HttpException(STATUS_FORBIDDEN); // Could be permission issue
+	// }
+
+	// status_code = 200;
+	// message = "OK";
+	// response_headers["Content-Type"] = getMimeType(fullPath, "text/plain");
+	// response_headers["Content-Length"] = intToString(content.size());
+	// response_body = content;
+// }
+
+string generateDirectoryListing(const string &dirPath, const string &uriPath)
 {
-	const vector<LocationConf>& locations = server.getLocations();
-	const LocationConf* matched_loc = NULL;
-	matched_loc = getMatchingLocation(locations, request.getPath());
+    DIR *dir = opendir(dirPath.c_str());
+    if (!dir)
+    {
+        return "";
+    }
 
-	string root = server.getRoot();
-	if (matched_loc) {
-		root = matched_loc->getRoot();
-	}
+    stringstream ss;
+    ss << "<html><head><title>Index of " << uriPath << "</title></head><body>\n";
+    ss << "<h1>Index of " << uriPath << "</h1><hr><ul>\n";
 
-	string fullPath;
-	if (!realPath(root, request.getPath(), fullPath)) {
-		throw HttpException(STATUS_NOT_FOUND);
-	}
-	// /resources/portfolio/index.html/index.html
-	// cout << "fullPath: " << fullPath << endl;
-	struct stat path_stat;
-	if (stat(fullPath.c_str(), &path_stat) != 0) {
-		throw HttpException(STATUS_NOT_FOUND);
-	}
+    if (uriPath != "/" && !uriPath.empty())
+    {
+        ss << "<li><a href=\"../\">../ (Parent Directory)</a></li>\n";
+    }
 
-	if (S_ISDIR(path_stat.st_mode))
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        string name = entry->d_name;
+        if (name == "." || name == "..")
+            continue;
+
+        string fullPath = dirPath;
+        if (fullPath.empty() || fullPath[fullPath.size() - 1] != '/')
+            fullPath += "/";
+        fullPath += name;
+
+        struct stat s;
+        bool isDir = false;
+        if (stat(fullPath.c_str(), &s) == 0)
+        {
+            if (S_ISDIR(s.st_mode))
+            {
+                isDir = true;
+            }
+        }
+
+        string linkName = name;
+        if (isDir)
+            linkName += "/";
+            
+        ss << "<li><a href=\"" << linkName << "\">" << linkName << "</a></li>\n";
+    }
+    closedir(dir);
+    ss << "</ul><hr></body></html>";
+    return ss.str();
+}
+
+void HttpResponse::buildStaticResponse(FdManager &manager)
+{
+	HttpRequest &request = manager.request;
+    HttpResponse &response = manager.response;
+    const Server &server = manager.blockServer;
+
+	// cout << "requested path: " << request.getPath() << '\n';
+
+	if (server.hasSetClientMaxBodySize() && request.getBodyContent().size() > server.getClientMaxBodySize())
 	{
-		bool found_index = false;
-		vector<string> indices;
-		if (matched_loc && matched_loc->indexIsSet())
-			indices = matched_loc->getIndex();
-		else
-			indices = server.getIndex();
+		throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
+	}
 
-		for (size_t i = 0; i < indices.size(); ++i)
+	// 2. Find matching location (Longest Prefix Match)
+	const LocationConf *location = getMatchingLocation(server.getLocations(), request.getPath());
+
+	// 3. Handle Redirection (301 / 302)
+	if (location && location->hasReturn())
+	{
+		pair<int, string> redir = location->getReturn();
+		response.setStatusCode(redir.first);
+		response.setMessage(HttpResponse::getDefaultStatusMessage(redir.first));
+		response.setResponseHeader("Location", redir.second);
+		response.setResponseBody("Redirecting...");
+		response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+		return;
+	}
+
+	// 4. Method Verification (405 Method Not Allowed)
+	if (location)
+	{
+		const set<string> &allowed = location->getAllowMethods();
+		if (allowed.find(request.getMethod()) == allowed.end())
 		{
-			string index_path = fullPath;
-			if (index_path[index_path.length() - 1] != '/')
-				index_path += "/";
-			index_path += indices[i];
-
-			if (stat(index_path.c_str(), &path_stat) == 0 && S_ISREG(path_stat.st_mode))
+			response.buildErrorResponse(HttpException(STATUS_METHOD_NOT_ALLOWED), server);
+			string allowHeader;
+			for (set<string>::const_iterator it = allowed.begin(); it != allowed.end(); ++it)
 			{
-				fullPath = index_path;
-				found_index = true;
+				if (it != allowed.begin())
+					allowHeader += ", ";
+				allowHeader += *it;
+			}
+			response.setResponseHeader("Allow", allowHeader);
+			response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+			return;
+		}
+	}
+
+	// 5. Construct Physical Path
+	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
+	string physicalPath;
+	if (!realPath(root, request.getPath(), physicalPath))
+	{
+		// cout << "forbidden 1\n";
+		throw HttpException(STATUS_FORBIDDEN); // Escaping the root directory structure
+	}
+
+	// cout << "physical path before: " << physicalPath << "\n";
+	// 6. File vs Directory Resolution
+	struct stat pathStat;
+	if (stat(physicalPath.c_str(), &pathStat) != 0)
+	{
+		throw HttpException(STATUS_NOT_FOUND);
+	}
+
+	if (S_ISDIR(pathStat.st_mode))
+	{
+		// cout << "is dir\n";
+		const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
+		bool indexFound = false;
+		for (size_t i = 0; i < indexes.size(); ++i)
+		{
+			string testIndex = physicalPath;
+			if (testIndex[testIndex.size() - 1] != '/')
+				testIndex += "/";
+			testIndex += indexes[i];
+
+			// cout << "Test index: " << testIndex << "\n";
+			struct stat indexStat;
+			if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
+			{
+				// cout << "enter the if\n";
+				physicalPath = testIndex;
+				indexFound = true;
 				break;
 			}
 		}
 
-		if (!found_index)
+		if (!indexFound)
 		{
-			if (matched_loc && matched_loc->hasAutoindex())
-				throw HttpException(STATUS_FORBIDDEN);
+			// cout << "index not found\n";
+			if (location && location->hasAutoindex())
+			{
+				string listing = generateDirectoryListing(physicalPath, request.getPath());
+				if (listing.empty())
+				{
+					// cout << "Server error 1\n";
+					throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+				}
+				response.setStatusCode(200);
+				response.setMessage("OK");
+				response.setResponseHeader("Content-Type", "text/html");
+				response.setResponseHeader("Content-Length", intToString(listing.size()));
+				response.setResponseBody(listing);
+				response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+				return;
+			}
 			else
+			{
+				// cout << "forbidden 2\n";
 				throw HttpException(STATUS_FORBIDDEN);
+			}
+		}
+	}
+	// cout << "physical path after: " << physicalPath << "\n";
+
+	if (stat(physicalPath.c_str(), &pathStat) != 0)
+	{
+		throw HttpException(STATUS_NOT_FOUND);
+	}
+
+	if (!S_ISREG(pathStat.st_mode))
+	{
+		// cout << "forbidden 3\n";
+		throw HttpException(STATUS_FORBIDDEN);
+	}
+
+	if (request.getMethod() == "GET")
+	{
+		string body;
+		if (!read_content(body, physicalPath))
+		{
+			// cout << "Server error 2\n";
+			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+		}
+		response.setStatusCode(200);
+		response.setMessage("OK");
+		response.setResponseHeader("Content-Type", getMimeType(physicalPath, "application/octet-stream"));
+		response.setResponseHeader("Content-Length", intToString(body.size()));
+		response.setResponseBody(body);
+	}
+	else if (request.getMethod() == "POST")
+	{
+		if (location && location->uploadEnabledStatus())
+		{
+			string uploadDir = location->getUploadPath();
+			if (uploadDir.empty())
+				uploadDir = ".";
+
+			string filename = request.getPath();
+			size_t pos = filename.rfind('/');
+			if (pos != string::npos)
+				filename = filename.substr(pos + 1);
+
+			if (filename.empty() || filename == "upload")
+			{
+				filename = "upload_" + intToString(time(NULL));
+			}
+
+			string finalUploadPath = uploadDir;
+			if (finalUploadPath.empty() || finalUploadPath[finalUploadPath.size() - 1] != '/')
+				finalUploadPath += "/";
+			finalUploadPath += filename;
+
+			ofstream outFile(finalUploadPath.c_str(), ios::binary);
+			if (!outFile.is_open())
+			{
+				// cout << "Server error 3\n";
+				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+			}
+			const string &fileData = request.getBodyContent();
+			outFile.write(fileData.data(), fileData.size());
+			outFile.close();
+
+			response.setStatusCode(201);
+			response.setMessage("Created");
+			response.setResponseHeader("Content-Type", "text/plain");
+			string bodyContent = "File uploaded successfully: " + filename;
+			response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
+			response.setResponseBody(bodyContent);
+		}
+		else
+		{
+			throw HttpException(STATUS_METHOD_NOT_ALLOWED);
+		}
+	}
+	else if (request.getMethod() == "DELETE")
+	{
+		if (std::remove(physicalPath.c_str()) == 0)
+		{
+			response.setStatusCode(204);
+			response.setMessage("No Content");
+			response.setResponseBody("");
+		}
+		else
+		{
+			// cout << "forbidden 4\n";
+			throw HttpException(STATUS_FORBIDDEN);
 		}
 	}
 
-	string content;
-	if (!read_content(content, fullPath))
-	{
-		throw HttpException(STATUS_FORBIDDEN); // Could be permission issue
-	}
-
-	status_code = 200;
-	message = "OK";
-	response_headers["Content-Type"] = getMimeType(fullPath, "text/plain");
-	response_headers["Content-Length"] = intToString(content.size());
-	response_body = content;
+	response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
 }
 
 void HttpResponse::serializeResponse(string httpVersion)
