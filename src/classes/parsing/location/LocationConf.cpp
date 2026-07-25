@@ -17,6 +17,7 @@ LocationConf::LocationConf()
     hasReturnFlag = false;
     uploadEnabled = false;
     hasUploadFlag = false;
+	hasCgiPassFlag = false;
 }
 
 LocationConf::~LocationConf()
@@ -113,21 +114,22 @@ void LocationConf::setEnableUpload(const string &token)
     else
         throw invalid_argument("Invalid value for upload: '" + token + "'. Valid values are 'on' or 'off'.");
 }
-void LocationConf::setCgiPass(const std::string &extension, const std::string &path)
+void LocationConf::setCgiPass(const std::string &extension)
 {
-    if (extension == ";" || path == ";")
+	if (hasCgiPassFlag)
+		throw std::invalid_argument("cgi_pass: duplicate directive in location block.");
+
+	if (extension == ";")
         throw std::invalid_argument("directive \"cgi_pass\" has empty value.");
 
-    if (extension[0] != '.')
-        throw std::invalid_argument("cgi_pass: extension must start with '.' (e.g. '.php')");
+    if (extension != ".py")
+        throw std::invalid_argument("cgi_pass: my server only supports .py extension for CGI scripts.");
 
-    if (cgiPass.find(extension) != cgiPass.end())
-        throw std::invalid_argument("cgi_pass: duplicate directive for extension " + extension);
-
-    cgiPass[extension] = path;
+    cgiPass = extension;
+    hasCgiPassFlag = true;
 }
 
-const map<string, string> &LocationConf::getCgiPass() const
+const string &LocationConf::getCgiPass() const
 {
     return this->cgiPass;
 }
@@ -179,7 +181,10 @@ const bool &LocationConf::rootIsSet() const
 {
     return setRootFlag;
 }
-
+const bool &LocationConf::hasCgiPass() const
+{
+	return hasCgiPassFlag;
+}
 
 bool LocationConf::operator==(const LocationConf &other) const
 {

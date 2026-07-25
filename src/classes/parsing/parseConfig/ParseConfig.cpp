@@ -53,8 +53,7 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
         else if (currToken == "cgi_pass")
         {
             string extension = consumeToken(i);
-            string path = consumeToken(i);
-            locationConf.setCgiPass(extension, path);
+            locationConf.setCgiPass(extension);
         }
         else if (currToken == "}")
             break;
@@ -150,68 +149,68 @@ const vector<Server> &ParseConfig::getServers() const
     return servers;
 }
 
-void ParseConfig::debug()
-{
-    cout << "--- Parsed Configuration ---" << endl;
-    for (size_t i = 0; i < servers.size(); ++i)
-    {
-        cout << "Server [" << i << "]:   ";
-        const vector<Listen> &listens = servers[i].getListens();
-        for (size_t j = 0; j < listens.size(); j++)
-            cout << "ip: " + listens[j].ip + ", port: " << listens[j].port << endl;
-        cout << "Root: " << servers[i].getRoot() << endl;
-        cout << "index: ";
-        for (size_t j = 0; j < servers[i].getIndex().size(); ++j)
-        {
-            cout << servers[i].getIndex()[j] << " ";
-        }
-        cout << endl;
-        cout << "client max body size: " << servers[i].getClientMaxBodySize() << "B" << endl;
-        string uri;
-        cout << "error_page: ";
-        for (std::map<int, std::string>::const_iterator it = servers[i].getErrorsPages().begin();
-             it != servers[i].getErrorsPages().end(); it++)
-        {
-            uri = it->second;
-            cout << it->first << " ";
-        }
-        cout << uri << endl;
-        cout << "server name: " << servers[i].getServerName() << endl;
+// void ParseConfig::debug()
+// {
+//     cout << "--- Parsed Configuration ---" << endl;
+//     for (size_t i = 0; i < servers.size(); ++i)
+//     {
+//         cout << "Server [" << i << "]:   ";
+//         const vector<Listen> &listens = servers[i].getListens();
+//         for (size_t j = 0; j < listens.size(); j++)
+//             cout << "ip: " + listens[j].ip + ", port: " << listens[j].port << endl;
+//         cout << "Root: " << servers[i].getRoot() << endl;
+//         cout << "index: ";
+//         for (size_t j = 0; j < servers[i].getIndex().size(); ++j)
+//         {
+//             cout << servers[i].getIndex()[j] << " ";
+//         }
+//         cout << endl;
+//         cout << "client max body size: " << servers[i].getClientMaxBodySize() << "B" << endl;
+//         string uri;
+//         cout << "error_page: ";
+//         for (std::map<int, std::string>::const_iterator it = servers[i].getErrorsPages().begin();
+//              it != servers[i].getErrorsPages().end(); it++)
+//         {
+//             uri = it->second;
+//             cout << it->first << " ";
+//         }
+//         cout << uri << endl;
+//         cout << "server name: " << servers[i].getServerName() << endl;
 
-        cout << "Locations:" << endl;
-        const vector<LocationConf> &locations = servers[i].getLocations();
-        for (size_t j = 0; j < locations.size(); ++j)
-        {
-            cout << "  - " << locations[j].getPath() << endl;
-            cout << "    allow_methods: ";
-            const set<string> &methods = locations[j].getAllowMethods();
-            for (set<string>::const_iterator it = methods.begin(); it != methods.end(); ++it)
-                cout << *it << " ";
-            cout << endl;
-            cout << "    root: " << locations[j].getRoot() << endl;
+//         cout << "Locations:" << endl;
+//         const vector<LocationConf> &locations = servers[i].getLocations();
+//         for (size_t j = 0; j < locations.size(); ++j)
+//         {
+//             cout << "  - " << locations[j].getPath() << endl;
+//             cout << "    allow_methods: ";
+//             const set<string> &methods = locations[j].getAllowMethods();
+//             for (set<string>::const_iterator it = methods.begin(); it != methods.end(); ++it)
+//                 cout << *it << " ";
+//             cout << endl;
+//             cout << "    root: " << locations[j].getRoot() << endl;
             
-            cout << "    index: " ;
-            for (size_t k = 0; k < locations[j].getIndex().size(); ++k)
-            {
-                cout << locations[j].getIndex()[k] << " ";
-            }
-            cout << endl;
-            cout << "    autoindex: " << (locations[j].hasAutoindex() ? "on" : "off") << endl;
-            if (locations[j].getReturn().first != 0)
-                cout << "    return: " << locations[j].getReturn().first << " " << locations[j].getReturn().second << endl;
-            cout << "    upload_enabled: " << (locations[j].uploadEnabledStatus() ? "on" : "off") << endl;
-            if (locations[j].uploadEnabledStatus())
-                cout << "    upload_path: " << locations[j].getUploadPath() << endl;
+//             cout << "    index: " ;
+//             for (size_t k = 0; k < locations[j].getIndex().size(); ++k)
+//             {
+//                 cout << locations[j].getIndex()[k] << " ";
+//             }
+//             cout << endl;
+//             cout << "    autoindex: " << (locations[j].hasAutoindex() ? "on" : "off") << endl;
+//             if (locations[j].getReturn().first != 0)
+//                 cout << "    return: " << locations[j].getReturn().first << " " << locations[j].getReturn().second << endl;
+//             cout << "    upload_enabled: " << (locations[j].uploadEnabledStatus() ? "on" : "off") << endl;
+//             if (locations[j].uploadEnabledStatus())
+//                 cout << "    upload_path: " << locations[j].getUploadPath() << endl;
 
-            const map<string, string> &cgiPassMap = locations[j].getCgiPass();
-            if (!cgiPassMap.empty()){
-                for (map<string, string>::const_iterator it = cgiPassMap.begin(); it != cgiPassMap.end(); ++it)
-                {
-                    cout << "    cgi_pass: ";
-                    cout  << it->first << " => " << it->second << endl;
-                }  
-            }
-        }
-    cout << "----------------------------" << endl;
-}
-}
+//             const map<string, string> &cgiPassMap = locations[j].getCgiPass();
+//             if (!cgiPassMap.empty()){
+//                 for (map<string, string>::const_iterator it = cgiPassMap.begin(); it != cgiPassMap.end(); ++it)
+//                 {
+//                     cout << "    cgi_pass: ";
+//                     cout  << it->first << " => " << it->second << endl;
+//                 }  
+//             }
+//         }
+//     cout << "----------------------------" << endl;
+// }
+// }

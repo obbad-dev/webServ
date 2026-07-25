@@ -116,18 +116,10 @@ void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server&
 {
 	const vector<LocationConf>& locations = server.getLocations();
 	const LocationConf* matched_loc = NULL;
-	size_t max_match_len = 0;
-
-	for (size_t i = 0; i < locations.size(); ++i) {
-		const string& loc_path = locations[i].getPath();
-		if (request.getPath().find(loc_path) == 0 && loc_path.length() > max_match_len) {
-			matched_loc = &locations[i];
-			max_match_len = loc_path.length();
-		}
-	}
+	matched_loc = getMatchingLocation(locations, request.getPath());
 
 	string root = server.getRoot();
-	if (matched_loc && matched_loc->rootIsSet()) {
+	if (matched_loc) {
 		root = matched_loc->getRoot();
 	}
 
@@ -135,7 +127,8 @@ void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server&
 	if (!realPath(root, request.getPath(), fullPath)) {
 		throw HttpException(STATUS_NOT_FOUND);
 	}
-
+	// /resources/portfolio/index.html/index.html
+	// cout << "fullPath: " << fullPath << endl;
 	struct stat path_stat;
 	if (stat(fullPath.c_str(), &path_stat) != 0) {
 		throw HttpException(STATUS_NOT_FOUND);
@@ -386,7 +379,7 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const string &cgiPath)
 			env[i] = const_cast<char *>(fdManager.env_vars[i].c_str());
 		}
 		env[fdManager.env_vars.size()] = NULL;
-		char cmd[] = "/usr/bin/python3";
+		char cmd[] = "/usr/bin";
 		char *args[] = {cmd, const_cast<char *>(cgiPath.c_str()), NULL};
 		execve(args[0], args, env);
 		exit(127);

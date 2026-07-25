@@ -22,7 +22,8 @@ private:
     bool uploadEnabled;
     string uploadPath;
     bool hasUploadFlag;
-    map<string, string> cgiPass;
+    string cgiPass;
+	bool hasCgiPassFlag;
     
 
 public:
@@ -37,7 +38,7 @@ public:
     void setReturn(const string &path, const string &status);
     void setUpload(const string &path);
     void setEnableUpload(const string &token);
-    void setCgiPass(const string &extension, const string &path);
+    void setCgiPass(const string &extension);
 
     const string &getRoot() const;
     const bool &rootIsSet() const;
@@ -51,6 +52,7 @@ public:
     const bool &uploadEnabledStatus() const;
     const string &getUploadPath() const;
     const bool &uploadIsSet() const;
-    const map<string, string> &getCgiPass() const;
+    const string &getCgiPass() const;
+    const bool &hasCgiPass() const;
     bool operator==(const LocationConf &other) const;
 };

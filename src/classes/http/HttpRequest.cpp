@@ -289,26 +289,17 @@ bool HttpRequest::parseRequest(int clientFd){
 bool HttpRequest::isCgi(const Server& server, string& script_path) const
 {
     size_t dot_pos = path.find_last_of('.');
-    if (dot_pos == string::npos) return false;
+
+    if (dot_pos == string::npos) 
+		return false;
     string ext = path.substr(dot_pos);
-	// cout << "EXTENSION: " << ext << endl;
 
-    const vector<LocationConf>& locations = server.getLocations();
-    const LocationConf* matched_loc = NULL;
-    size_t max_match_len = 0;
-
-    for (size_t i = 0; i < locations.size(); ++i) {
-        const string& loc_path = locations[i].getPath();
-        if (path.find(loc_path) == 0 && loc_path.length() > max_match_len) {
-            matched_loc = &locations[i];
-            max_match_len = loc_path.length();
-        }
-    }
+    const LocationConf* matched_loc = getMatchingLocation(server.getLocations(), path);
 
     if (matched_loc) {
-        const map<string, string>& cgiPass = matched_loc->getCgiPass();
-        if (cgiPass.find(ext) != cgiPass.end()) {
-            string root = matched_loc->rootIsSet() ? matched_loc->getRoot() : server.getRoot();
+        const string& cgiPass = matched_loc->getCgiPass();
+        if (matched_loc->hasCgiPass() && ext == cgiPass) {
+            string root = matched_loc->getRoot();
             realPath(root, path, script_path);
             return true;
         }

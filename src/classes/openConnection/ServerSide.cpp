@@ -300,6 +300,7 @@ void ServerSide::communication_part()
             }
             else if (event_arr[i].events & EPOLLIN)
             {
+				//? i start from here
                 // Event is on a client socket, and it is ready to be read
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
