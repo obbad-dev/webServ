@@ -13,15 +13,19 @@ using namespace std;
 #include <netinet/in.h>
 #include <stdexcept>
 #include <sys/socket.h>
+#include <csignal>
 #include <unistd.h>
 
 #include "HttpRequest.hpp"
 #include "HttpResponse.hpp"
 #include "ParseConfig.hpp"
 
-#define TIMEOUT 30
+#define TIMEOUT 120
+
 enum CONN_TYPE { SERVER, CLIENT };
 enum STATCGI { NOT_FINISHED, FINISHED };
+
+extern int sig;
 
 struct FdManager {
   Listen listen;
