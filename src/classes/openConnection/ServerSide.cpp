@@ -169,18 +169,15 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
 		
 		if (it->second.stat_fd_to_cgi == FINISHED ) {
 			cgiToClient.erase(it->second.to_cgi_fd);
-			it->second.to_cgi_fd = -1;
 		}
 		if (it->second.stat_fd_from_cgi == FINISHED) {
 			cgiToClient.erase(it->second.from_cgi_fd);
-			it->second.from_cgi_fd = -1;
 		}
 		
         // If the CGI process has completely finished (both pipes closed and process reaped)
         if (it->second.cgi_state == FINISHED) {
             // 1. Parse the raw CGI output to extract headers and the real body
             it->second.response.parseCgiOutput();
-            
             // 2. Build the final HTTP response string
             it->second.response.serializeResponse(it->second.request.getProtocolVersion());
             
@@ -209,8 +206,6 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
     
     if (ret == -1)
     {
-        // Connection error while sending
-        // cout << "sixth remove epoll\n";
         disconnect_client(client_fd, it->second);
         fds.erase(client_fd);
     }
@@ -228,8 +223,7 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
             disconnect_client(client_fd, it->second);
             fds.erase(it);
         }
-        it->second.request.resetRequest();
-        it->second.response.resetObjectResponse();
+		it->second.reset();
     }
 }
 

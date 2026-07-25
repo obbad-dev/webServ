@@ -237,19 +237,29 @@ void HttpResponse::parseCgiOutput()
 				std::string key = line.substr(0, colon_pos);
 				std::string value = line.substr(colon_pos + 1);
 
-				// Trim leading whitespace
+				// Trim leading and trailing whitespace for value
 				size_t start = value.find_first_not_of(" \t");
-				if (start != std::string::npos)
-					value = value.substr(start);
+				if (start != std::string::npos) {
+					size_t end = value.find_last_not_of(" \t");
+					value = value.substr(start, end - start + 1);
+				} else {
+					value = "";
+				}
 
-				if (key == "Status")
+				if (key == "Status" || key == "status")
 				{
 					std::istringstream status_iss(value);
 					status_iss >> status_code;
 					std::getline(status_iss, message);
+					
+					// Trim leading and trailing whitespace for message
 					size_t msg_start = message.find_first_not_of(" \t");
-					if (msg_start != std::string::npos)
-						message = message.substr(msg_start);
+					if (msg_start != std::string::npos) {
+						size_t msg_end = message.find_last_not_of(" \t");
+						message = message.substr(msg_start, msg_end - msg_start + 1);
+					} else {
+						message = "";
+					}
 				}
 				else
 				{
@@ -317,162 +327,3 @@ int HttpResponse::send_response(int fd)
 	return 1;
 }
 
-void makeEnvVars(FdManager &fdManager)
-{
-	vector<string> &env_vars = fdManager.env_vars;
-	env_vars.clear();
-
-	const map<string, string> &headers = fdManager.request.getHeaders();
-	const string content_length = (fdManager.request.getBodyContent().empty()) ? "" : intToString(fdManager.request.getBodyContent().size());
-	
-
-	env_vars.push_back("REQUEST_METHOD=" + fdManager.request.getMethod());
-	env_vars.push_back("QUERY_STRING=" + fdManager.request.getQuery());
-	if (!content_length.empty())
-		env_vars.push_back("CONTENT_LENGTH=" + content_length);
-	if (!content_length.empty())
-		env_vars.push_back("CONTENT_TYPE=" + (headers.find("Content-Type") != headers.end() ? headers.at("Content-Type") : ""));
-	env_vars.push_back("SCRIPT_NAME=" + fdManager.request.getPath());
-	env_vars.push_back("SERVER_NAME=" + fdManager.listen.ip);
-	env_vars.push_back("SERVER_PORT=" + intToString(fdManager.listen.port));
-	env_vars.push_back("SERVER_PROTOCOL=" + fdManager.request.getProtocolVersion());
-	env_vars.push_back("GATEWAY_INTERFACE=CGI/1.1");
-	env_vars.push_back("SERVER_SOFTWARE=webServ/1.0");
-}
-
-void HttpResponse::prepareCGI(FdManager &fdManager, const string &cgiPath)
-{
-	int to_cgi_fd[2];
-	int from_cgi_fd[2];
-	if (pipe(to_cgi_fd) == -1)
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	if (pipe(from_cgi_fd) == -1)
-	{
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	}
-	fcntl(to_cgi_fd[WRITE], F_SETFL, O_NONBLOCK);
-	fcntl(from_cgi_fd[READ], F_SETFL, O_NONBLOCK);
-
-	makeEnvVars(fdManager);
-
-	pid_t pid = fork();
-	if (pid == -1)
-	{
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		close(from_cgi_fd[READ]);
-		close(from_cgi_fd[WRITE]);
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	}
-	else if (pid == 0)
-	{
-		dup2(to_cgi_fd[READ], STDIN_FILENO);
-		dup2(from_cgi_fd[WRITE], STDOUT_FILENO);
-
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		close(from_cgi_fd[WRITE]);
-		close(from_cgi_fd[READ]);
-		char *env[fdManager.env_vars.size() + 1];
-		for (size_t i = 0; i < fdManager.env_vars.size(); ++i)
-		{
-			env[i] = const_cast<char *>(fdManager.env_vars[i].c_str());
-		}
-		env[fdManager.env_vars.size()] = NULL;
-		char cmd[] = "/usr/bin";
-		char *args[] = {cmd, const_cast<char *>(cgiPath.c_str()), NULL};
-		execve(args[0], args, env);
-		exit(127);
-	}
-	else
-	{
-		close(to_cgi_fd[READ]);
-		close(from_cgi_fd[WRITE]);
-		fdManager.to_cgi_fd = to_cgi_fd[WRITE];
-		fdManager.from_cgi_fd = from_cgi_fd[READ];
-
-		fdManager.cgi_pid = pid;
-		
-		ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.from_cgi_fd, EPOLLIN);
-		if (fdManager.request.getBodyContent().empty()){
-			close(fdManager.to_cgi_fd);
-			fdManager.to_cgi_fd = -1;
-		}
-		else
-			ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.to_cgi_fd, EPOLLOUT);
-	}
-}
-
-
-void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events)
-{
-	if (triggered_fd == fdManager.to_cgi_fd && (events & EPOLLOUT))
-	{
-		const std::string& body = fdManager.request.getBodyContent();
-		
-		ssize_t n = write(fdManager.to_cgi_fd, 
-						  body.data() + fdManager.cgi_bytes_written, 
-						  body.size() - fdManager.cgi_bytes_written);
-		
-		if (n == -1)
-		{
-			if (errno != EAGAIN && errno != EWOULDBLOCK)
-			{
-				// cout << "first remove epoll\n";
-				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
-				close(fdManager.to_cgi_fd);
-				fdManager.stat_fd_to_cgi = FINISHED;
-				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-			}
-		}
-		else
-		{
-			fdManager.cgi_bytes_written += n;
-
-			if (fdManager.cgi_bytes_written == body.size())
-			{
-				// cout << "second remove epoll\n";
-				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
-				close(fdManager.to_cgi_fd);
-				fdManager.stat_fd_to_cgi = FINISHED;
-			}
-		}
-    }
-	
-	if (triggered_fd == fdManager.from_cgi_fd && (events & EPOLLIN))
-	{
-		char buffer[4096];
-		ssize_t n = read(fdManager.from_cgi_fd, buffer, sizeof(buffer));
-		if (n == -1)
-		{
-			if (errno != EAGAIN && errno != EWOULDBLOCK)
-			{
-				// cout << "third remove epoll\n";
-				ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
-				close(fdManager.from_cgi_fd);
-				fdManager.stat_fd_from_cgi = FINISHED;
-				fdManager.cgi_state = FINISHED;
-				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-			}
-		}
-		else if (n == 0)
-		{
-			// cout << "fourth remove epoll\n";
-			ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.from_cgi_fd);
-			close(fdManager.from_cgi_fd);
-			fdManager.stat_fd_from_cgi = FINISHED;
-			fdManager.cgi_state = FINISHED;
-			int status;
-			waitpid(fdManager.cgi_pid, &status, 0);
-			if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
-				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-		}
-		else
-		{
-			HttpResponse &response = fdManager.response;
-			response.setResponseBody(response.getResponseBody() + std::string(buffer, n));
-		}
-	}
-}
