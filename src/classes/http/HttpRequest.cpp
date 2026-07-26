@@ -109,24 +109,29 @@ void HttpRequest::determineConnectionStatus()
 }
 
 //read Request
-string HttpRequest::readRequest(int& clientFd)
+bool HttpRequest::readRequest(int& clientFd)
 {
     char buffer[4096];
-    memset(buffer, 0, sizeof(buffer)); // replace it with ours
+    memset(buffer, 0, sizeof(buffer)); 
 
     ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
     if (byteRead == 0)
     {
         cout  << "READ REquest " << endl;
-        return "";
+        return false;
     }
     if (byteRead < 0)
     {
-        if (errno != EAGAIN && errno != EWOULDBLOCK )
+        if (errno != EAGAIN && errno != EWOULDBLOCK ){
             throw HttpException(ERR_READ);
+		}
     }
-    // cout << buffer << "\n";
-    return buffer;
+	else
+	{
+		raw_buffer.append(buffer, byteRead);
+	}
+	return true;
+	
 }
 
 void HttpRequest::parseHeaders(string& buffer)
@@ -177,11 +182,12 @@ void HttpRequest::parseHeaders(string& buffer)
 
 //* parse body content based on content length
 void HttpRequest::parseBodyContent(string& buffer){
-    if (buffer.size() < contentLength)
-        return;
+
+    if (buffer.size() < contentLength) return;
+
     this->bodyContent = buffer.substr(0, contentLength);
     buffer.erase(0);
-    is_complete = true;
+    is_complete = true;;
 }
 
 void HttpRequest::parseChunkedBody(string& buffer)
@@ -231,15 +237,10 @@ void HttpRequest::parseChunkedBody(string& buffer)
 
 //* parse request
 bool HttpRequest::parseRequest(int clientFd){
-    // TODO: Step 1: Read incrementally from clientFd
-    string str = readRequest(clientFd);
 
-    if (str.empty())
+    if (!readRequest(clientFd))
         return false;
 
-    raw_buffer.append(str);
-
-    // TODO: Step 2: Parse headers if not already done
     if (!headers_parsed)
     {
         size_t end_headers = raw_buffer.find("\r\n\r\n");
@@ -253,7 +254,6 @@ bool HttpRequest::parseRequest(int clientFd){
         setBodyType();
 		determineConnectionStatus();
     }
-    // TODO: Step 3: Parse body if headers are parsed but request is not complete
     if (headers_parsed && !is_complete)
     {
         if (body_type == CHUNKED){
@@ -262,29 +262,27 @@ bool HttpRequest::parseRequest(int clientFd){
         else if (body_type == CONTENT_LENGTH){
             parseBodyContent(raw_buffer);
         }
+		if (is_complete)
+			debug();
     }
-    // else{
-    //     if (!debuging)
-    //         debug();
-    //     debuging = true;
-    // }
+
     return true;
 }
 
 
 
-// void HttpRequest::debug()
-// {
-//     cout << "Method: " << this->method << '\n';
-//     cout << "Target: " << this->path << '\n';
-//     cout << "Protocol: " << this->protocolVersion << '\n';
-//     cout << "------------Headers-----------" << '\n';
-//     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
-//         cout << it->first << ": " << it->second << '\n';
-//     cout << "------------Body-----------" << '\n';
-//     cout << this->bodyContent << '\n';
-//     cout << "------------------------------------" << '\n';
-// }
+void HttpRequest::debug()
+{
+    cout << "Method: " << this->method << '\n';
+    cout << "Target: " << this->path << '\n';
+    cout << "Protocol: " << this->protocolVersion << '\n';
+    cout << "------------Headers-----------" << '\n';
+    for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+        cout << it->first << ": " << it->second << '\n';
+    cout << "------------Body-----------" << '\n';
+    cout << this->bodyContent << '\n';
+    cout << "------------------------------------" << '\n';
+}
 
 bool HttpRequest::isCgi(const Server& server, string& script_path) const
 {

@@ -115,41 +115,38 @@ void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager& se
 
 void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManager>::iterator& it)
 {
-    // Update activity timer to prevent timeout
+
     it->second.lastActivity = time(NULL);
+	HttpRequest& request = it->second.request;
+	HttpResponse& response = it->second.response;
 
     try {
         // Read and parse the incoming HTTP request
-        if (it->second.request.parseRequest(client_fd) == false)
+        if (!request.parseRequest(client_fd))
         {
-            // Parsing failed or client disconnected
-            // cout << "fifth remove epoll\n";
             disconnect_client(client_fd, it->second);
             fds.erase(client_fd);
             return;
         }
-
         // Check if the request is fully received and parsed
-        if (it->second.request.isComplete())
+        if (request.isComplete())
         {
-            string cgi_path = ""; 
-            bool is_cgi = it->second.request.isCgi(it->second.blockServer, cgi_path);
-            
+            string cgi_path; 
+            bool is_cgi = request.isCgi(it->second.blockServer, cgi_path);
+    
             if (is_cgi)
             {
                 // Prepare pipes and fork the CGI process
-                it->second.response.prepareCGI(it->second, cgi_path);
-        
+                response.prepareCGI(it->second, cgi_path);
+
                 // Map both ends of the CGI pipe back to this client's file descriptor
-				if (it->second.to_cgi_fd != -1)
+				cgiToClient[it->second.from_cgi_fd] = client_fd;
+				if (it->second.stat_fd_to_cgi == NOT_FINISHED)
                 	cgiToClient[it->second.to_cgi_fd] = client_fd;
-				if (it->second.from_cgi_fd != -1)
-                	cgiToClient[it->second.from_cgi_fd] = client_fd;
             }
             else
             {
-                it->second.response.buildStaticResponse(it->second);
-
+                response.buildStaticResponse(it->second);
                 change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
             }
         }
@@ -158,8 +155,9 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
     {
         std::cout << "DEBUG: caught HttpException in handleClientInput!\n";
         // Handle any errors thrown during parsing or building the response
-        it->second.response.buildErrorResponse(e, it->second.blockServer);
-        it->second.response.serializeResponse(it->second.request.getProtocolVersion());
+        response.buildErrorResponse(e, it->second.blockServer);
+        response.serializeResponse(request.getProtocolVersion());
+		
         change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
     }
 }
@@ -170,9 +168,16 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
     {
         // Execute CGI read or write operations based on the event and triggered FD
         it->second.response.excuteCGI(it->second, cgi_fd, events);
-		// cout << "cgi state from: " << it->second.stat_fd_from_cgi << '\n';
+		// cout << "cgi_fd: " << cgi_fd << " events: "  << '\n';
+		// if (events & EPOLLIN)
+		// 	cout << "EPOLLIN event for cgi_fd: " << cgi_fd << '\n';
+		// if (events & EPOLLOUT)
+		// 	cout << "EPOLLOUT event for cgi_fd: " << cgi_fd << '\n';
+		// if (events & EPOLLERR)
+		// 	cout << "EPOLLERR event for cgi_fd: " << cgi_fd << '\n';
+		// if (events & EPOLLHUP)
+		// 	cout << "EPOLLHUP event for cgi_fd: " << cgi_fd << '\n';
 
-		// cout << "cgi state to: " << it->second.stat_fd_to_cgi << '\n';
 		if (it->second.stat_fd_to_cgi == FINISHED )
         {
 			cgiToClient.erase(it->second.to_cgi_fd);
@@ -181,7 +186,7 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
         {
 			cgiToClient.erase(it->second.from_cgi_fd);
 		}
-		
+	
         // If the CGI process has completely finished (both pipes closed and process reaped)
         if (it->second.cgi_state == FINISHED)
         {
@@ -189,7 +194,6 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
             it->second.response.parseCgiOutput();
             // 2. Build the final HTTP response string
             it->second.response.serializeResponse(it->second.request.getProtocolVersion());
-            
             // 3. Now we tell epoll we are ready to send it to the client
             change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
         }
@@ -304,7 +308,6 @@ void ServerSide::communication_part()
             }
             else if (event_arr[i].events & EPOLLIN)
             {
-				// cout << "EPOLLIN event for client_fd: " << client_fd << '\n';
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
             else if (event_arr[i].events & EPOLLOUT)

@@ -35,7 +35,7 @@ private:
 //* Private Methods
     void determineConnectionStatus();
     void setBodyType();
-    string readRequest(int &clientFd);
+    bool readRequest(int &clientFd);
     void parseBodyContent(string& buffer);
     void parseChunkedBody(string& buffer);
     void parseHeaders(string& buffer);

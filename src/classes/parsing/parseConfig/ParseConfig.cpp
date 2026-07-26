@@ -46,7 +46,7 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
             string path = consumeToken(i);
             locationConf.setReturn(path, status);
         }
-        else if (currToken == "upload")
+        else if (currToken == "upload_path")
             locationConf.setUpload(consumeToken(i));
         else if (currToken == "enable_upload")
             locationConf.setEnableUpload(consumeToken(i));
@@ -63,7 +63,7 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
             throw invalid_argument("Syntax error: too many values in directive " + currToken);
     }
     if (locationConf.uploadEnabledStatus() && !locationConf.uploadIsSet())
-        throw invalid_argument("directive \"upload\": 'enable_upload' is set to 'on' but no upload path is specified.");
+        throw invalid_argument("directive \"upload_path\": 'enable_upload' is set to 'on' but no upload path is specified.");
     if (find(server.getLocations().begin(), server.getLocations().end(), locationConf) != server.getLocations().end())
         throw invalid_argument("duplicate location block for path: " + locationConf.getPath());
     server.pushLocation(locationConf);
