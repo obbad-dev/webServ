@@ -238,6 +238,74 @@ string generateDirectoryListing(const string &dirPath, const string &uriPath)
     return ss.str();
 }
 
+bool getBoundary(string &content_type, string &boundary)
+{
+	size_t pos = content_type.find("boundary=");
+	
+	if (pos == std::string::npos)
+		return false;
+
+	boundary = content_type.substr(pos + 9);
+	pos = boundary.find(';');
+
+	if (pos != std::string::npos)
+		boundary = boundary.substr(0, pos);
+
+	if ((boundary.size() >= 2) && (boundary[0] == '"' && boundary[boundary.size() - 1] == '"'))
+		boundary = boundary.substr(1, (boundary.size() - 2));
+
+	return (!boundary.empty());
+}
+
+bool getDataFromRequest(string &filename, string &filebody, const string &request_body, string &boundary)
+{
+	string delimiter = "--" + boundary;
+	size_t content_start = request_body.find(delimiter);
+	if (content_start == std::string::npos)
+		return false;
+
+	content_start += delimiter.size();
+	if (request_body.compare(content_start, 2, "\r\n") != 0)
+		return false;
+
+	content_start += 2;
+
+	size_t headers_end = request_body.find("\r\n\r\n", content_start);
+	if (headers_end == std::string::npos)
+		return false;
+
+	string part_headers = request_body.substr(content_start, headers_end - content_start);
+
+	size_t fn_pos = part_headers.find("filename=\"");
+	if (fn_pos == std::string::npos)
+		return false;
+
+	fn_pos += 10;
+	size_t fn_end = part_headers.find("\"", fn_pos);
+	if (fn_end == std::string::npos)
+		return false;
+
+	filename = part_headers.substr(fn_pos, fn_end - fn_pos);
+	if (filename.empty())
+		return false;
+
+	size_t body_start = headers_end + 4;
+	size_t body_end = request_body.find(delimiter, body_start);
+	if (body_end == std::string::npos)
+		return false;
+
+	if (body_end > body_start)
+	{
+		if (request_body.compare(body_end - 2, 2, "\r\n") == 0)
+			body_end -= 2;
+		else if (request_body[body_end - 1] == '\n')
+			body_end -= 1;
+	}
+
+	filebody = request_body.substr(body_start, body_end - body_start);
+	return true;
+}
+
 void HttpResponse::buildStaticResponse(FdManager &manager)
 {
 	HttpRequest &request = manager.request;
@@ -384,23 +452,41 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		if (location && location->uploadEnabledStatus())
 		{
 			string uploadDir = location->getUploadPath();
-			if (uploadDir.empty())
-				uploadDir = ".";
+			// if (uploadDir.empty())
+			// 	uploadDir = ".";
 
-			string filename = request.getPath();
-			size_t pos = filename.rfind('/');
-			if (pos != string::npos)
-				filename = filename.substr(pos + 1);
+			if (stat(uploadDir.c_str(), &pathStat) == 0 && !S_ISDIR(pathStat.st_mode))
+				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 
-			if (filename.empty() || filename == "upload")
+			const map<string, string> &headers = request.getHeaders();
+			map<string, string>::const_iterator it = headers.find("content-type");
+
+			if (it == headers.end())
+				throw HttpException(STATUS_BAD_REQUEST);
+
+			string content_type = it->second;
+			string finalUploadPath, filebody;
+
+			if (content_type.find("multipart/form-data") != std::string::npos)
 			{
-				filename = "upload_" + intToString(time(NULL));
-			}
+				string boundary;
+				if (getBoundary(content_type, boundary) == false)
+					throw HttpException(STATUS_BAD_REQUEST);
 
-			string finalUploadPath = uploadDir;
-			if (finalUploadPath.empty() || finalUploadPath[finalUploadPath.size() - 1] != '/')
-				finalUploadPath += "/";
-			finalUploadPath += filename;
+				string filename;
+				if (getDataFromRequest(filename, filebody, request.getBodyContent(), boundary) == false)
+					throw HttpException(STATUS_BAD_REQUEST);
+
+				if (realPath(uploadDir, filename, finalUploadPath) == false)
+					throw HttpException(STATUS_BAD_REQUEST);
+			}
+			else
+			{
+				if (realPath(uploadDir, "file.bin", finalUploadPath) == false)
+					throw HttpException(STATUS_BAD_REQUEST);
+
+				filebody = request.getBodyContent();
+			}
 
 			ofstream outFile(finalUploadPath.c_str(), ios::binary);
 			if (!outFile.is_open())
@@ -410,12 +496,14 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 			}
 			const string &fileData = request.getBodyContent();
 			outFile.write(fileData.data(), fileData.size());
-			outFile.close();
+
+			if (outFile.bad())
+				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 
 			response.setStatusCode(201);
 			response.setMessage("Created");
 			response.setResponseHeader("Content-Type", "text/plain");
-			string bodyContent = "File uploaded successfully: " + filename;
+			string bodyContent = "File uploaded successfully: " + finalUploadPath;
 			response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
 			response.setResponseBody(bodyContent);
 		}
@@ -426,6 +514,8 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	}
 	else if (request.getMethod() == "DELETE")
 	{
+		if (access(physicalPath.c_str(), F_OK) != 0)
+			throw HttpException(STATUS_NOT_FOUND);
 		if (std::remove(physicalPath.c_str()) == 0)
 		{
 			response.setStatusCode(204);

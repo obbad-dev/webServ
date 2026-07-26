@@ -176,7 +176,8 @@ void HttpRequest::parseHeaders(string& buffer)
 }
 
 //* parse body content based on content length
-void HttpRequest::parseBodyContent(string& buffer){
+void HttpRequest::parseBodyContent(string& buffer)
+{
     if (buffer.size() < contentLength)
         return;
     this->bodyContent = buffer.substr(0, contentLength);
