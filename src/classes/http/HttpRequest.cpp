@@ -262,8 +262,6 @@ bool HttpRequest::parseRequest(int clientFd){
         else if (body_type == CONTENT_LENGTH){
             parseBodyContent(raw_buffer);
         }
-		if (is_complete)
-			debug();
     }
 
     return true;
@@ -271,18 +269,18 @@ bool HttpRequest::parseRequest(int clientFd){
 
 
 
-void HttpRequest::debug()
-{
-    cout << "Method: " << this->method << '\n';
-    cout << "Target: " << this->path << '\n';
-    cout << "Protocol: " << this->protocolVersion << '\n';
-    cout << "------------Headers-----------" << '\n';
-    for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
-        cout << it->first << ": " << it->second << '\n';
-    cout << "------------Body-----------" << '\n';
-    cout << this->bodyContent << '\n';
-    cout << "------------------------------------" << '\n';
-}
+// void HttpRequest::debug()
+// {
+//     cout << "Method: " << this->method << '\n';
+//     cout << "Target: " << this->path << '\n';
+//     cout << "Protocol: " << this->protocolVersion << '\n';
+//     cout << "------------Headers-----------" << '\n';
+//     for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+//         cout << it->first << ": " << it->second << '\n';
+//     cout << "------------Body-----------" << '\n';
+//     cout << this->bodyContent << '\n';
+//     cout << "------------------------------------" << '\n';
+// }
 
 bool HttpRequest::isCgi(const Server& server, string& script_path) const
 {

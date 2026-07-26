@@ -153,7 +153,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
     }
     catch (const HttpException& e)
     {
-        std::cout << "DEBUG: caught HttpException in handleClientInput!\n";
+        // std::cout << "DEBUG: caught HttpException in handleClientInput!\n";
         // Handle any errors thrown during parsing or building the response
         response.buildErrorResponse(e, it->second.blockServer);
         response.serializeResponse(request.getProtocolVersion());
@@ -200,7 +200,7 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
     }
     catch (const HttpException& e)
     {
-        std::cout << "DEBUG: caught HttpException in handleCgiEvent!\n";
+        // std::cout << "DEBUG: caught HttpException in handleCgiEvent!\n";
         // If the CGI process fails, build an HTTP error response (e.g. 500)
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         cgiToClient.erase(it->second.to_cgi_fd);
