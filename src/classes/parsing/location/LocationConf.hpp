@@ -4,7 +4,10 @@
 #include <set>
 #include <vector>
 #include <map>
+#include <stdint.h>
 using namespace std;
+
+
 
 class LocationConf
 {
@@ -22,9 +25,10 @@ private:
     bool uploadEnabled;
     string uploadPath;
     bool hasUploadFlag;
-    string cgiPass;
+    pair<string, string> cgiPass;
 	bool hasCgiPassFlag;
-    
+	bool hasClientMaxBodySizeFlag;
+	uint64_t clientMaxBodySize;
 
 public:
     LocationConf();
@@ -38,7 +42,8 @@ public:
     void setReturn(const string &path, const string &status);
     void setUpload(const string &path);
     void setEnableUpload(const string &token);
-    void setCgiPass(const string &extension);
+    void setCgiPass(const string &extension, const string &ineterpreter);
+	void setClientMaxBodySize(const string &token);
 
     const string &getRoot() const;
     const bool &rootIsSet() const;
@@ -52,7 +57,9 @@ public:
     const bool &uploadEnabledStatus() const;
     const string &getUploadPath() const;
     const bool &uploadIsSet() const;
-    const string &getCgiPass() const;
+    const pair<string, string> &getCgiPass() const;
     const bool &hasCgiPass() const;
+	const bool &hasClientMaxBodySize() const;
+	const uint64_t &getClientMaxBodySize() const;
     bool operator==(const LocationConf &other) const;
 };

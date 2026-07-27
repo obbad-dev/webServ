@@ -50,10 +50,13 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
             locationConf.setUpload(consumeToken(i));
         else if (currToken == "enable_upload")
             locationConf.setEnableUpload(consumeToken(i));
+		else if (currToken == "client_max_body_size")
+            locationConf.setClientMaxBodySize(consumeToken(i));
         else if (currToken == "cgi_pass")
         {
-            string extension = consumeToken(i);
-            locationConf.setCgiPass(extension);
+            const string& extension = consumeToken(i);
+           const string& interpreter = consumeToken(i);
+            locationConf.setCgiPass(extension, interpreter);
         }
         else if (currToken == "}")
             break;

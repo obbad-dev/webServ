@@ -312,16 +312,17 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
     HttpResponse &response = manager.response;
     const Server &server = manager.blockServer;
 
-	// cout << "requested path: " << request.getPath() << '\n';
-
-	if (server.hasSetClientMaxBodySize() && request.getBodyContent().size() > server.getClientMaxBodySize())
+	// 2. Find matching location (Longest Prefix Match)
+	const LocationConf *location = getMatchingLocation(server.getLocations(), request.getPath());
+	if (location && location->hasClientMaxBodySize())
+	{
+		if (request.getBodyContent().size() > location->getClientMaxBodySize())
+			throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
+	}
+	else if (request.getBodyContent().size() > server.getClientMaxBodySize())
 	{
 		throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
 	}
-
-	// 2. Find matching location (Longest Prefix Match)
-	const LocationConf *location = getMatchingLocation(server.getLocations(), request.getPath());
-
 	// 3. Handle Redirection (301 / 302)
 	if (location && location->hasReturn())
 	{
@@ -337,6 +338,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	// 4. Method Verification (405 Method Not Allowed)
 	if (location)
 	{
+		// cout << "method verification\n";
 		const set<string> &allowed = location->getAllowMethods();
 		if (allowed.find(request.getMethod()) == allowed.end())
 		{
@@ -355,86 +357,86 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	}
 
 	// 5. Construct Physical Path
-	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
+	struct stat pathStat;
 	string physicalPath;
+	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
 	if (!realPath(root, request.getPath(), physicalPath))
 	{
 		// cout << "forbidden 1\n";
 		throw HttpException(STATUS_FORBIDDEN); // Escaping the root directory structure
 	}
 
-	// cout << "physical path before: " << physicalPath << "\n";
-	// 6. File vs Directory Resolution
-	struct stat pathStat;
-	if (stat(physicalPath.c_str(), &pathStat) != 0)
-	{
-		throw HttpException(STATUS_NOT_FOUND);
-	}
-
-	if (S_ISDIR(pathStat.st_mode))
-	{
-		// cout << "is dir\n";
-		const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
-		bool indexFound = false;
-		for (size_t i = 0; i < indexes.size(); ++i)
-		{
-			string testIndex = physicalPath;
-			if (testIndex[testIndex.size() - 1] != '/')
-				testIndex += "/";
-			testIndex += indexes[i];
-
-			// cout << "Test index: " << testIndex << "\n";
-			struct stat indexStat;
-			if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
-			{
-				// cout << "enter the if\n";
-				physicalPath = testIndex;
-				indexFound = true;
-				break;
-			}
-		}
-
-		if (!indexFound)
-		{
-			// cout << "index not found\n";
-			if (location && location->hasAutoindex())
-			{
-				string listing = generateDirectoryListing(physicalPath, request.getPath());
-				if (listing.empty())
-				{
-					// cout << "Server error 1\n";
-					throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-				}
-				response.setStatusCode(200);
-				response.setMessage("OK");
-				response.setResponseHeader("Content-Type", "text/html");
-				response.setResponseHeader("Content-Length", intToString(listing.size()));
-				response.setResponseBody(listing);
-				response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
-				return;
-			}
-			else
-			{
-				// cout << "forbidden 2\n";
-				throw HttpException(STATUS_FORBIDDEN);
-			}
-		}
-	}
-	// cout << "physical path after: " << physicalPath << "\n";
-
-	if (stat(physicalPath.c_str(), &pathStat) != 0)
-	{
-		throw HttpException(STATUS_NOT_FOUND);
-	}
-
-	if (!S_ISREG(pathStat.st_mode))
-	{
-		// cout << "forbidden 3\n";
-		throw HttpException(STATUS_FORBIDDEN);
-	}
-
 	if (request.getMethod() == "GET")
 	{
+		// cout << "physical path before: " << physicalPath << "\n";
+		// 6. File vs Directory Resolution
+		if (stat(physicalPath.c_str(), &pathStat) != 0)
+		{
+			throw HttpException(STATUS_NOT_FOUND);
+		}
+
+		if (S_ISDIR(pathStat.st_mode))
+		{
+			// cout << "is dir\n";
+			const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
+			bool indexFound = false;
+			for (size_t i = 0; i < indexes.size(); ++i)
+			{
+				string testIndex = physicalPath;
+				if (testIndex[testIndex.size() - 1] != '/')
+					testIndex += "/";
+				testIndex += indexes[i];
+
+				// cout << "Test index: " << testIndex << "\n";
+				struct stat indexStat;
+				if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
+				{
+					cout << "enter the if\n";
+					physicalPath = testIndex;
+					indexFound = true;
+					break;
+				}
+			}
+
+			if (!indexFound)
+			{
+				// cout << "index not found\n";
+				if (location && location->hasAutoindex())
+				{
+					string listing = generateDirectoryListing(physicalPath, request.getPath());
+					if (listing.empty())
+					{
+						// cout << "Server error 1\n";
+						throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+					}
+					response.setStatusCode(200);
+					response.setMessage("OK");
+					response.setResponseHeader("Content-Type", "text/html");
+					response.setResponseHeader("Content-Length", intToString(listing.size()));
+					response.setResponseBody(listing);
+					response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+					return;
+				}
+				else
+				{
+					// cout << "forbidden 2\n";
+					throw HttpException(STATUS_FORBIDDEN);
+				}
+			}
+		}
+		// cout << "physical path after: " << physicalPath << "\n";
+
+		if (stat(physicalPath.c_str(), &pathStat) != 0)
+		{
+			throw HttpException(STATUS_NOT_FOUND);
+		}
+
+		if (!S_ISREG(pathStat.st_mode))
+		{
+			// cout << "forbidden 3\n";
+			throw HttpException(STATUS_FORBIDDEN);
+		}
+
 		string body;
 		if (!read_content(body, physicalPath))
 		{
@@ -449,6 +451,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	}
 	else if (request.getMethod() == "POST")
 	{
+		// cout << "eneters post\n";
 		if (location && location->uploadEnabledStatus())
 		{
 			string uploadDir = location->getUploadPath();
@@ -662,20 +665,16 @@ void HttpResponse::resetObjectResponse() {
 	response_body.clear();
 	bytesSent = 0; 
 }
-
 int HttpResponse::send_response(int fd)
 {
-	while (bytesSent < response_serialized.size())
+	ssize_t n = send(fd, (response_serialized.data() + bytesSent), (response_serialized.size() - bytesSent), 0);
+
+	if (n == -1)
 	{
-		ssize_t n = send(fd, (response_serialized.data() + bytesSent), (response_serialized.size() - bytesSent), 0);
-		if (n == -1)
-		{
-			if (errno == EAGAIN || errno == EWOULDBLOCK)
-				return 0;
-			return -1;
-		}
-		bytesSent += n;
+		return -1;
 	}
+	bytesSent += n;
+
 	return 1;
 }
 

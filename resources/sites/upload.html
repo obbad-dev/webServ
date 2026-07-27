@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>webServ - File Upload & HTTP Tester</title>
+    <style>
+        /* Supplementary & Upload-Specific Styles */
+        .dropzone {
+            border: 2px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 16px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.4);
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent-teal);
+            background: rgba(13, 213, 202, 0.05);
+            box-shadow: 0 0 25px rgba(13, 213, 202, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .dropzone-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 1.25rem;
+            background: rgba(99, 102, 241, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-indigo);
+            transition: all 0.3s ease;
+        }
+
+        .dropzone:hover .dropzone-icon {
+            background: rgba(13, 213, 202, 0.2);
+            color: var(--accent-teal);
+            transform: scale(1.1) rotate(-5deg);
+        }
+
+        .dropzone-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.4rem;
+        }
+
+        .dropzone-subtitle {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+        }
+
+        .file-input-hidden {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .sample-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .sample-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .btn-sample {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-sample:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent-indigo);
+            color: #fff;
+        }
+
+        .file-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1.25rem;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-card-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            overflow: hidden;
+        }
+
+        .file-preview-thumb {
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .file-card-meta {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .file-card-name {
+            font-weight: 600;
+            color: #fff;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-card-sub {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 0.2rem;
+        }
+
+        .btn-icon-remove {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.4rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-icon-remove:hover {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.15);
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1.25rem;
+        }
+
+        @media (max-width: 640px) {
+            .config-grid { grid-template-columns: 1fr; }
+        }
+
+        .progress-wrapper {
+            margin-top: 1.25rem;
+            display: none;
+        }
+
+        .progress-bar-bg {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--accent-indigo), var(--accent-teal));
+            border-radius: 4px;
+            transition: width 0.2s ease;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.4rem;
+        }
+
+        .response-panel {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.25rem;
+            margin-top: 1.25rem;
+        }
+
+        .response-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .status-badge {
+            padding: 0.35rem 0.85rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .status-2xx {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-4xx {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .status-5xx {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .code-block {
+            background: #090d16;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            padding: 0.85rem;
+            font-family: 'Consolas', 'Fira Code', 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #38bdf8;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .curl-box {
+            background: #090d16;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            border-radius: 8px;
+            padding: 0.85rem;
+            font-family: monospace;
+            font-size: 0.82rem;
+            color: #a7f3d0;
+            position: relative;
+            margin-top: 0.75rem;
+            word-break: break-all;
+        }
+
+        .btn-copy {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-copy:hover {
+            background: var(--accent-indigo);
+        }
+
+        .uploaded-file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            margin-bottom: 0.6rem;
+            transition: all 0.2s ease;
+        }
+
+        .uploaded-file-item:hover {
+            background: rgba(30, 41, 59, 0.8);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .uploaded-file-name {
+            font-weight: 500;
+            color: #f3f4f6;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .uploaded-file-name:hover {
+            color: var(--accent-teal);
+            text-decoration: underline;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation Header -->
+        <nav class="nav-bar">
+            <div class="nav-brand">
+                <div class="nav-brand-logo">WS</div>
+                <span>webServ Upload Suite</span>
+            </div>
+            <div class="nav-links">
+                <a href="upload.html" class="nav-link active">📁 Upload Tester</a>
+                <a href="index.html" class="nav-link">⚙️ CGI Dashboard</a>
+                <a href="/" class="nav-link">📂 Autoindex</a>
+            </div>
+            <div class="server-badge">
+                <span class="status-dot"></span>
+                <span>Port 8080 Active</span>
+            </div>
+        </nav>
+
+        <header style="margin-bottom: 2rem;">
+            <h1>webServ File Upload & HTTP Tester</h1>
+            <p>Directly test POST multipart uploads, binary streams, custom headers, and DELETE methods</p>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Left Column: Upload Controller -->
+            <div class="panel">
+                <h2 class="panel-title"><span>Upload Request Builder</span></h2>
+
+                <!-- Drag & Drop Zone -->
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="file-input" class="file-input-hidden">
+                    <div class="dropzone-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <div class="dropzone-title">Drag & drop files here, or click to browse</div>
+                    <div class="dropzone-subtitle">Supports images, documents, binaries, text, and code files</div>
+                </div>
+
+                <!-- Quick Sample Generators -->
+                <div class="sample-bar">
+                    <span class="sample-label">Or generate sample:</span>
+                    <button type="button" class="btn-sample" id="btn-sample-txt">📄 text.txt</button>
+                    <button type="button" class="btn-sample" id="btn-sample-json">📊 data.json</button>
+                    <button type="button" class="btn-sample" id="btn-sample-bin">⚡ 100KB binary</button>
+                </div>
+
+                <!-- Selected File Card -->
+                <div class="file-card" id="selected-file-card" style="display: none;">
+                    <div class="file-card-info">
+                        <div class="file-preview-thumb" id="file-thumb">📄</div>
+                        <div class="file-card-meta">
+                            <div class="file-card-name" id="file-card-name">file.txt</div>
+                            <div class="file-card-sub">
+                                <span id="file-card-size">0 KB</span>
+                                <span>•</span>
+                                <span id="file-card-type">text/plain</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-icon-remove" id="btn-remove-file" title="Remove file">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Config Options -->
+                <div class="config-grid">
+                    <div class="form-group">
+                        <label for="upload-target">Upload Endpoint</label>
+                        <select id="upload-target" class="form-control">
+                            <option value="/" selected>POST / (Native C++ Handler)</option>
+                            <option value="/cgi/uploads/">POST /cgi/uploads/ (Direct Upload)</option>
+                            <option value="/cgi/api.py?resource=files">POST /cgi/api.py (CGI Handler)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="upload-mode">Upload Encoding Mode</label>
+                        <select id="upload-mode" class="form-control">
+                            <option value="multipart" selected>multipart/form-data (Browser standard)</option>
+                            <option value="raw_binary">application/octet-stream (Raw stream -> file.bin)</option>
+                            <option value="raw_text">text/plain (Raw text stream)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="progress-wrapper" id="progress-wrapper">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progress-status">Uploading...</span>
+                        <span id="progress-percent">0%</span>
+                    </div>
+                </div>
+
+                <!-- Upload Submit Button -->
+                <button type="button" id="btn-submit-upload" class="btn btn-primary" style="margin-top: 1.5rem; width: 100%; font-size: 1rem; padding: 0.85rem;">
+                    🚀 Send Upload Request to webServ
+                </button>
+
+                <!-- Command Generator (Curl equivalent) -->
+                <div style="margin-top: 1.5rem;">
+                    <label style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Terminal Command Equivalent:</label>
+                    <div class="curl-box" id="curl-cmd">
+                        curl -i -X POST -F "file=@sample.txt" http://localhost:8080/
+                        <button class="btn-copy" onclick="copyCurl()">Copy</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Response Inspector & File List -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                <!-- HTTP Response Inspector -->
+                <div class="panel">
+                    <h2 class="panel-title"><span>HTTP Response Inspector</span></h2>
+                    
+                    <div id="response-placeholder" style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 1rem; opacity: 0.5;">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                        <div>No request sent yet. Select or generate a file and click Upload!</div>
+                    </div>
+
+                    <div class="response-panel" id="response-panel" style="display: none;">
+                        <div class="response-header">
+                            <div>
+                                <span class="status-badge" id="res-status-badge">201 Created</span>
+                            </div>
+                            <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                                Time: <span id="res-time" style="color: var(--accent-teal); font-weight: 600;">-</span>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 0.75rem;">
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Response Body:</label>
+                            <div class="code-block" id="res-body">-</div>
+                        </div>
+
+                        <div>
+                            <label style="font-size: 0.8rem; color: var(--text-secondary); display: block; margin-bottom: 0.3rem;">Response Headers:</label>
+                            <div class="code-block" id="res-headers" style="max-height: 120px; color: #a5b4fc;">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Uploaded Files & DELETE Tester -->
+                <div class="panel">
+                    <h2 class="panel-title">
+                        <span>Uploaded Directory (`/cgi/uploads/`)</span>
+                        <button id="btn-refresh-uploads" style="background: none; border: none; cursor: pointer; color: var(--accent-teal); font-size: 0.9rem; font-weight: 600;">🔄 Refresh</button>
+                    </h2>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                        Click <b>GET</b> to view/download or <b>DELETE</b> to send an HTTP DELETE request to webServ.
+                    </p>
+                    <div id="uploads-list">
+                        <div class="empty-state">Loading uploaded files...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Reference -->
+        <div class="panel diag-panel" style="margin-top: 1rem;">
+            <h2 class="panel-title"><span>webServ Configuration Reference</span></h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; font-size: 0.88rem; color: var(--text-secondary);">
+                <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.2); padding: 1rem; border-radius: 8px;">
+                    <h4 style="color: var(--accent-indigo); margin-bottom: 0.5rem;">📁 Direct C++ Upload Engine</h4>
+                    <p style="margin-bottom: 0.5rem;">Configured in <code>default.conf</code>:</p>
+                    <pre style="background: #090d16; padding: 0.5rem; border-radius: 4px; color: var(--accent-teal);">enable_upload on;
+upload_path ./resources/sites/cgi/uploads;</pre>
+                    <p style="margin-top: 0.5rem;">Parses <code>multipart/form-data</code> directly in C++ (<code>HttpResponse.cpp</code>) and responds with <code>HTTP/1.1 201 Created</code>.</p>
+                </div>
+
+                <div style="background: rgba(13, 213, 202, 0.05); border: 1px solid rgba(13, 213, 202, 0.2); padding: 1rem; border-radius: 8px;">
+                    <h4 style="color: var(--accent-teal); margin-bottom: 0.5rem;">🗑️ HTTP DELETE Handling</h4>
+                    <p style="margin-bottom: 0.5rem;">Configured via allowed methods:</p>
+                    <pre style="background: #090d16; padding: 0.5rem; border-radius: 4px; color: var(--accent-teal);">allow_methods GET POST DELETE;</pre>
+                    <p style="margin-top: 0.5rem;">Sends <code>DELETE /cgi/uploads/filename</code> to test resource removal on webServ.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+        let selectedFile = null;
+
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+        const selectedFileCard = document.getElementById('selected-file-card');
+        const fileCardName = document.getElementById('file-card-name');
+        const fileCardSize = document.getElementById('file-card-size');
+        const fileCardType = document.getElementById('file-card-type');
+        const fileThumb = document.getElementById('file-thumb');
+        const btnRemoveFile = document.getElementById('btn-remove-file');
+        const btnSubmitUpload = document.getElementById('btn-submit-upload');
+        const curlCmd = document.getElementById('curl-cmd');
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            });
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            if (dt.files && dt.files.length > 0) {
+                setFile(dt.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files && fileInput.files.length > 0) {
+                setFile(fileInput.files[0]);
+            }
+        });
+
+        btnRemoveFile.addEventListener('click', () => {
+            clearFile();
+        });
+
+        function setFile(file) {
+            selectedFile = file;
+            fileCardName.textContent = file.name;
+            fileCardSize.textContent = formatBytes(file.size);
+            fileCardType.textContent = file.type || 'application/octet-stream';
+            
+            if (file.type && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    fileThumb.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                fileThumb.textContent = getFileIcon(file.name);
+            }
+
+            selectedFileCard.style.display = 'flex';
+            updateCurlCommand();
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            fileInput.value = '';
+            selectedFileCard.style.display = 'none';
+            updateCurlCommand();
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function getFileIcon(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return '🖼️';
+            if (['pdf', 'doc', 'docx', 'txt', 'md'].includes(ext)) return '📄';
+            if (['zip', 'tar', 'gz', '7z'].includes(ext)) return '📦';
+            if (['json', 'js', 'html', 'css', 'py', 'cpp', 'h'].includes(ext)) return '💻';
+            return '📁';
+        }
+
+        document.getElementById('btn-sample-txt').addEventListener('click', () => {
+            const content = `webServ Upload Test File\nCreated at: ${new Date().toISOString()}\nServer: webServ (C++98 HTTP/1.1 implementation)\n`;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const file = new File([blob], 'webserv_test.txt', { type: 'text/plain' });
+            setFile(file);
+            showToast('Generated sample text.txt file');
+        });
+
+        document.getElementById('btn-sample-json').addEventListener('click', () => {
+            const data = {
+                tester: 'webServ Upload Suite',
+                timestamp: new Date().toISOString(),
+                status: 'ready',
+                test_values: [10, 20, 30, 40, 50],
+                server_info: { protocol: 'HTTP/1.1', language: 'C++' }
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const file = new File([blob], 'test_data.json', { type: 'application/json' });
+            setFile(file);
+            showToast('Generated sample data.json file');
+        });
+
+        document.getElementById('btn-sample-bin').addEventListener('click', () => {
+            const size = 100 * 1024;
+            const buffer = new Uint8Array(size);
+            for (let i = 0; i < size; i++) buffer[i] = i % 256;
+            const blob = new Blob([buffer], { type: 'application/octet-stream' });
+            const file = new File([blob], 'sample_100kb.bin', { type: 'application/octet-stream' });
+            setFile(file);
+            showToast('Generated 100KB binary sample file');
+        });
+
+        document.getElementById('upload-target').addEventListener('change', updateCurlCommand);
+        document.getElementById('upload-mode').addEventListener('change', updateCurlCommand);
+
+        function updateCurlCommand() {
+            const target = document.getElementById('upload-target').value;
+            const mode = document.getElementById('upload-mode').value;
+            const fname = selectedFile ? selectedFile.name : 'filename.ext';
+            
+            let cmd = '';
+            if (mode === 'multipart') {
+                cmd = `curl -i -X POST -F "file=@${fname}" http://localhost:8080${target}`;
+            } else if (mode === 'raw_binary') {
+                cmd = `curl -i -X POST --data-binary "@${fname}" -H "Content-Type: application/octet-stream" http://localhost:8080${target}`;
+            } else {
+                cmd = `curl -i -X POST --data-binary "@${fname}" -H "Content-Type: text/plain" http://localhost:8080${target}`;
+            }
+            
+            curlCmd.innerHTML = `${escapeHtml(cmd)} <button class="btn-copy" onclick="copyCurl()">Copy</button>`;
+        }
+
+        function copyCurl() {
+            const target = document.getElementById('upload-target').value;
+            const mode = document.getElementById('upload-mode').value;
+            const fname = selectedFile ? selectedFile.name : 'filename.ext';
+            let cmd = mode === 'multipart'
+                ? `curl -i -X POST -F "file=@${fname}" http://localhost:8080${target}`
+                : `curl -i -X POST --data-binary "@${fname}" -H "Content-Type: application/octet-stream" http://localhost:8080${target}`;
+            
+            navigator.clipboard.writeText(cmd);
+            showToast('Curl command copied to clipboard!');
+        }
+
+        btnSubmitUpload.addEventListener('click', async () => {
+            if (!selectedFile) {
+                showToast('Please select or generate a file first', true);
+                return;
+            }
+
+            const targetUrl = document.getElementById('upload-target').value;
+            const mode = document.getElementById('upload-mode').value;
+            
+            const progressWrapper = document.getElementById('progress-wrapper');
+            const progressFill = document.getElementById('progress-fill');
+            const progressPercent = document.getElementById('progress-percent');
+            const progressStatus = document.getElementById('progress-status');
+
+            progressWrapper.style.display = 'block';
+            progressFill.style.width = '20%';
+            progressPercent.textContent = '20%';
+            progressStatus.textContent = 'Transmitting data...';
+
+            const startTime = performance.now();
+
+            try {
+                let response, responseText;
+
+                if (mode === 'multipart') {
+                    const formData = new FormData();
+                    formData.append('file', selectedFile, selectedFile.name);
+
+                    response = await fetch(targetUrl, {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    const arrayBuffer = await selectedFile.arrayBuffer();
+                    const contentType = mode === 'raw_binary' ? 'application/octet-stream' : 'text/plain';
+
+                    response = await fetch(targetUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': contentType
+                        },
+                        body: arrayBuffer
+                    });
+                }
+
+                progressFill.style.width = '100%';
+                progressPercent.textContent = '100%';
+                progressStatus.textContent = 'Complete!';
+
+                const endTime = performance.now();
+                const latency = Math.round(endTime - startTime);
+
+                responseText = await response.text();
+                
+                displayResponse(response.status, response.statusText, response.headers, responseText, latency);
+
+                if (response.ok || response.status === 201) {
+                    showToast(`File uploaded! (${response.status} ${response.statusText})`);
+                    fetchUploadedFiles();
+                } else {
+                    showToast(`Server returned status ${response.status}`, true);
+                }
+
+            } catch (err) {
+                console.error(err);
+                progressWrapper.style.display = 'none';
+                showToast('Network error: Could not reach webServ on port 8080', true);
+                displayResponse(0, 'Network Failure', null, err.message || 'Connection refused or dropped.', 0);
+            } finally {
+                setTimeout(() => {
+                    progressWrapper.style.display = 'none';
+                }, 1000);
+            }
+        });
+
+        function displayResponse(status, statusText, headers, body, latency) {
+            document.getElementById('response-placeholder').style.display = 'none';
+            const resPanel = document.getElementById('response-panel');
+            resPanel.style.display = 'block';
+
+            const badge = document.getElementById('res-status-badge');
+            badge.textContent = `${status} ${statusText || ''}`;
+
+            if (status >= 200 && status < 300) {
+                badge.className = 'status-badge status-2xx';
+            } else if (status >= 400 && status < 500) {
+                badge.className = 'status-badge status-4xx';
+            } else {
+                badge.className = 'status-badge status-5xx';
+            }
+
+            document.getElementById('res-time').textContent = `${latency} ms`;
+            document.getElementById('res-body').textContent = body || '(empty response body)';
+
+            let headerStr = '';
+            if (headers) {
+                headers.forEach((val, key) => {
+                    headerStr += `${key}: ${val}\n`;
+                });
+            }
+            document.getElementById('res-headers').textContent = headerStr || '(no headers available)';
+        }
+
+        async function fetchUploadedFiles() {
+            const listEl = document.getElementById('uploads-list');
+            try {
+                const response = await fetch('/cgi/api.py?resource=files');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                
+                listEl.innerHTML = '';
+                if (!data.files || data.files.length === 0) {
+                    listEl.innerHTML = '<div class="empty-state">No uploaded files in /cgi/uploads/ yet.</div>';
+                    return;
+                }
+
+                data.files.forEach(file => {
+                    const item = document.createElement('div');
+                    item.className = 'uploaded-file-item';
+                    
+                    const icon = getFileIcon(file.name);
+                    const sizeStr = formatBytes(file.size);
+
+                    item.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 0.75rem; overflow: hidden;">
+                            <span style="font-size: 1.2rem;">${icon}</span>
+                            <div style="display: flex; flex-direction: column; overflow: hidden;">
+                                <a href="cgi/uploads/${encodeURIComponent(file.name)}" target="_blank" class="uploaded-file-name" title="${escapeHtml(file.name)}">
+                                    ${escapeHtml(file.name)}
+                                </a>
+                                <span style="font-size: 0.78rem; color: var(--text-secondary);">${sizeStr}</span>
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <a href="cgi/uploads/${encodeURIComponent(file.name)}" target="_blank" class="btn btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.8rem; text-decoration: none;">
+                                👁️ GET
+                            </a>
+                            <button class="btn btn-danger" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;" onclick="deleteFile('${escapeJs(file.name)}')">
+                                🗑️ DELETE
+                            </button>
+                        </div>
+                    `;
+                    listEl.appendChild(item);
+                });
+
+            } catch (err) {
+                console.error(err);
+                listEl.innerHTML = '<div class="empty-state" style="color: #ef4444;">Unable to fetch uploads directory. Ensure webServ is running.</div>';
+            }
+        }
+
+        async function deleteFile(filename) {
+            if (!confirm(`Send HTTP DELETE request for "${filename}" to webServ?`)) return;
+
+            const startTime = performance.now();
+            try {
+                const response = await fetch(`/cgi/uploads/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+
+                const endTime = performance.now();
+                const latency = Math.round(endTime - startTime);
+                const text = await response.text();
+
+                displayResponse(response.status, response.statusText, response.headers, text || `Deleted ${filename}`, latency);
+
+                if (response.ok || response.status === 200 || response.status === 204) {
+                    showToast(`File "${filename}" deleted successfully!`);
+                    fetchUploadedFiles();
+                } else {
+                    const cgiRes = await fetch(`/cgi/api.py?resource=files&file=${encodeURIComponent(filename)}`, {
+                        method: 'DELETE'
+                    });
+                    const cgiData = await cgiRes.json();
+                    if (cgiData.status === 'success') {
+                        showToast(`File deleted via CGI`);
+                        fetchUploadedFiles();
+                    } else {
+                        showToast(`Failed to delete file: ${response.status}`, true);
+                    }
+                }
+            } catch (err) {
+                showToast(`Error deleting file: ${err.message}`, true);
+            }
+        }
+
+        document.getElementById('btn-refresh-uploads').addEventListener('click', fetchUploadedFiles);
+
+        function showToast(message, isError = false) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            if (isError) toast.style.borderColor = '#ef4444';
+            
+            toast.innerHTML = `
+                <span style="color: ${isError ? '#ef4444' : 'var(--accent-teal)'}; font-weight: bold;">
+                    ${isError ? '✕' : '✓'}
+                </span>
+                <span>${escapeHtml(message)}</span>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function escapeJs(str) {
+            return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        fetchUploadedFiles();
+        updateCurlCommand();
+    </script>
+</body>
+</html>

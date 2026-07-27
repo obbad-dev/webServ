@@ -128,17 +128,17 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
             fds.erase(client_fd);
             return;
         }
+
         // Check if the request is fully received and parsed
         if (request.isComplete())
         {
             string cgi_path; 
             bool is_cgi = request.isCgi(it->second.blockServer, cgi_path);
-    
+
             if (is_cgi)
             {
                 // Prepare pipes and fork the CGI process
                 response.prepareCGI(it->second, cgi_path);
-
                 // Map both ends of the CGI pipe back to this client's file descriptor
 				cgiToClient[it->second.from_cgi_fd] = client_fd;
 				if (it->second.stat_fd_to_cgi == NOT_FINISHED)
@@ -168,15 +168,6 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
     {
         // Execute CGI read or write operations based on the event and triggered FD
         it->second.response.excuteCGI(it->second, cgi_fd, events);
-		// cout << "cgi_fd: " << cgi_fd << " events: "  << '\n';
-		// if (events & EPOLLIN)
-		// 	cout << "EPOLLIN event for cgi_fd: " << cgi_fd << '\n';
-		// if (events & EPOLLOUT)
-		// 	cout << "EPOLLOUT event for cgi_fd: " << cgi_fd << '\n';
-		// if (events & EPOLLERR)
-		// 	cout << "EPOLLERR event for cgi_fd: " << cgi_fd << '\n';
-		// if (events & EPOLLHUP)
-		// 	cout << "EPOLLHUP event for cgi_fd: " << cgi_fd << '\n';
 
 		if (it->second.stat_fd_to_cgi == FINISHED )
         {
@@ -235,11 +226,13 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
         if (!it->second.request.isKeepAlive())
         {
             // If the client requested Connection: close, disconnect immediately
-            // cout << "seventh remove epoll with fd: " << ;
             disconnect_client(client_fd, it->second);
-            fds.erase(it);
+            fds.erase(client_fd);
         }
-		it->second.reset();
+        else
+        {
+            it->second.reset();
+        }
     }
 }
 

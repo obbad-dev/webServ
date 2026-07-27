@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cerrno>
+#include <climits>
 
 LocationConf::LocationConf()
 {
@@ -18,6 +19,8 @@ LocationConf::LocationConf()
     uploadEnabled = false;
     hasUploadFlag = false;
 	hasCgiPassFlag = false;
+	hasClientMaxBodySizeFlag = false;
+	clientMaxBodySize = 0;
 }
 
 LocationConf::~LocationConf()
@@ -39,7 +42,8 @@ void LocationConf::setAllowMethods(const vector<string> &tokens)
     vector<string> validMethods;
     validMethods.push_back("GET");
     validMethods.push_back("POST");
-    validMethods.push_back("DELETE");   
+    validMethods.push_back("DELETE");  
+	allowMethods.clear();
     for (size_t i = 0; i < tokens.size(); ++i)
     {
         if (find(validMethods.begin(), validMethods.end(), tokens[i]) == validMethods.end())
@@ -114,22 +118,74 @@ void LocationConf::setEnableUpload(const string &token)
     else
         throw invalid_argument("Invalid value for upload: '" + token + "'. Valid values are 'on' or 'off'.");
 }
-void LocationConf::setCgiPass(const std::string &extension)
+void LocationConf::setCgiPass(const std::string &extension, const std::string &ineterpreter)
 {
 	if (hasCgiPassFlag)
 		throw std::invalid_argument("cgi_pass: duplicate directive in location block.");
 
-	if (extension == ";")
-        throw std::invalid_argument("directive \"cgi_pass\" has empty value.");
+	if (extension == ";" || ineterpreter == ";")
+        throw std::invalid_argument("directive \"cgi_pass\" extension or interpreter has empty value.");
 
-    if (extension != ".py")
-        throw std::invalid_argument("cgi_pass: my server only supports .py extension for CGI scripts.");
+    if (extension != ".py" && extension != ".php" && extension != ".bla")
+        throw std::invalid_argument("cgi_pass: my server only supports .py, .php, and .bla extensions for CGI scripts.");
 
-    cgiPass = extension;
+    cgiPass = make_pair(extension, ineterpreter);
     hasCgiPassFlag = true;
 }
+void LocationConf::setClientMaxBodySize(const string &token)
+{
+	const size_t KB_MULTIPLIER = 1024ULL;
+	const size_t MB_MULTIPLIER = 1024ULL * 1024ULL;
+	const size_t GB_MULTIPLIER = 1024ULL * 1024ULL * 1024ULL;
+	
+    if (hasClientMaxBodySizeFlag)
+        throw runtime_error("duplicate 'client_max_body_size' directive in location block");
+    if (token == ";")
+        throw invalid_argument("The 'client_max_body_size' directive is Empty");
 
-const string &LocationConf::getCgiPass() const
+    if (!token.empty() && token[0] == '-' && isdigit(token[1]))
+        throw invalid_argument("number of client_max_body_size must be positive: " + token);
+    char *end;
+    errno = 0;
+    unsigned long long value = strtoull(token.c_str(), &end, 10);
+    if (end == token)
+        throw invalid_argument("invalid number of client_max_body_size " + token);
+    if (errno == ERANGE)
+        throw invalid_argument("number client_max_body_size overflowed " + token);
+
+    unsigned long long multiplier = 1;
+    if (*end != '\0')
+    {
+        if (*(end + 1) != '\0')
+            throw invalid_argument("Unsupported unit: " + token + " in client_max_body_size directive");
+
+        char unit = *end;
+        if (unit == 'M' || unit == 'm')
+            multiplier = MB_MULTIPLIER;
+        else if (unit == 'G' || unit == 'g')
+            multiplier = GB_MULTIPLIER;
+        else if (unit == 'K' || unit == 'k')
+            multiplier = KB_MULTIPLIER;
+        else
+            throw invalid_argument("Unsupported unit: " + token + " in client_max_body_size directive");
+    }
+    if (value > ULLONG_MAX / multiplier)
+            throw std::invalid_argument("'client_max_body_size' is too large: " + token);
+    this->clientMaxBodySize = value * multiplier;
+    this->hasClientMaxBodySizeFlag = true;
+}
+
+const bool &LocationConf::hasClientMaxBodySize() const
+{
+	return this->hasClientMaxBodySizeFlag;
+}
+
+const uint64_t &LocationConf::getClientMaxBodySize() const
+{
+	return this->clientMaxBodySize;
+}
+
+const pair<string, string> &LocationConf::getCgiPass() const
 {
     return this->cgiPass;
 }

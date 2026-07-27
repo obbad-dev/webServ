@@ -116,20 +116,11 @@ bool HttpRequest::readRequest(int& clientFd)
 
     ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
     if (byteRead == 0)
-    {
-        cout  << "READ REquest " << endl;
         return false;
-    }
     if (byteRead < 0)
-    {
-        if (errno != EAGAIN && errno != EWOULDBLOCK ){
-            throw HttpException(ERR_READ);
-		}
-    }
+        throw HttpException(ERR_READ);
 	else
-	{
 		raw_buffer.append(buffer, byteRead);
-	}
 	return true;
 	
 }
@@ -293,8 +284,8 @@ bool HttpRequest::isCgi(const Server& server, string& script_path) const
     const LocationConf* matched_loc = getMatchingLocation(server.getLocations(), path);
 
     if (matched_loc) {
-        const string& cgiPass = matched_loc->getCgiPass();
-        if (matched_loc->hasCgiPass() && ext == cgiPass) {
+        const pair<string, string>& cgiPass = matched_loc->getCgiPass();
+        if (matched_loc->hasCgiPass() && ext == cgiPass.first) {
             string root = matched_loc->getRoot();
             realPath(root, path, script_path);
             return true;

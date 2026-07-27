@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 void makeEnvVars(FdManager &fdManager)
 {
@@ -29,9 +30,23 @@ void makeEnvVars(FdManager &fdManager)
 	env_vars.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env_vars.push_back("SERVER_SOFTWARE=webServ/1.0");
 }
+static bool interpreterIsExecutable(const std::string &interpreterPath)
+{
+	struct stat st;
+
+	if (stat(interpreterPath.c_str(), &st) == -1 || !S_ISREG(st.st_mode))
+		return false;
+	if (access(interpreterPath.c_str(), X_OK) == -1)
+		return false;
+
+	return true;
+}
 
 void HttpResponse::prepareCGI(FdManager &fdManager, const string &cgiPath)
 {
+
+	if (!interpreterIsExecutable(cgiPath))
+		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 	int to_cgi_fd[2];
 	int from_cgi_fd[2];
 	if (pipe(to_cgi_fd) == -1)
@@ -115,12 +130,8 @@ static void handleCGIWrite(FdManager &fdManager)
 
 	if (bytes_written == -1)
 	{
-		if (errno != EAGAIN && errno != EWOULDBLOCK)
-		{
-			finishCgiWrite(fdManager);
-			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-		}
-		return;
+		finishCgiWrite(fdManager);
+		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 	}
 	fdManager.cgi_bytes_written += bytes_written;
 	if (fdManager.cgi_bytes_written >= body.size())
@@ -142,14 +153,10 @@ static void handleCGIRead(FdManager &fdManager)
 	
 	if (bytes_read == -1)
 	{
-		if (errno != EAGAIN && errno != EWOULDBLOCK)
-		{
-			finishCgiRead(fdManager);
-			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-		}
-		return;
+		finishCgiRead(fdManager);
+		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 	}
-	
+
 	if (bytes_read == 0)
 	{
 		finishCgiRead(fdManager);
