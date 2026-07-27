@@ -494,8 +494,8 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 				// cout << "Server error 3\n";
 				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 			}
-			const string &fileData = request.getBodyContent();
-			outFile.write(fileData.data(), fileData.size());
+
+			outFile.write(filebody.data(), filebody.size());
 
 			if (outFile.bad())
 				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
