@@ -21,7 +21,7 @@ void makeEnvVars(FdManager &fdManager)
 	if (!content_length.empty())
 		env_vars.push_back("CONTENT_LENGTH=" + content_length);
 	if (!content_length.empty())
-		env_vars.push_back("CONTENT_TYPE=" + (headers.find("Content-Type") != headers.end() ? headers.at("Content-Type") : ""));
+		env_vars.push_back("CONTENT_TYPE=" + (headers.find("content-type") != headers.end() ? headers.at("content-type") : ""));
 	env_vars.push_back("SCRIPT_NAME=" + fdManager.request.getPath());
 	env_vars.push_back("SERVER_NAME=" + fdManager.listen.ip);
 	env_vars.push_back("SERVER_PORT=" + intToString(fdManager.listen.port));
