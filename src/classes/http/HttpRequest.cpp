@@ -47,8 +47,8 @@ void HttpRequest::setHeaders(string key, string value){
     headers[key] = value;
 }
 void HttpRequest::setMethod(string method){
-    if (method != "GET" && method != "POST" && method != "DELETE")
-        throw HttpException(ERR_UNSUPPORTED_METHOD);
+    if (method.empty())
+        throw HttpException(STATUS_METHOD_NOT_ALLOWED);
     this->method = method;
 }
 void HttpRequest::setTarget(string target){

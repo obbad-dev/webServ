@@ -153,11 +153,11 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
     }
     catch (const HttpException& e)
     {
-        // std::cout << "DEBUG: caught HttpException in handleClientInput!\n";
+        std::cout << "DEBUG: caught HttpException in handleClientInput!\n";
         // Handle any errors thrown during parsing or building the response
         response.buildErrorResponse(e, it->second.blockServer);
-        response.serializeResponse(request.getProtocolVersion());
-		
+        const string& httpVersion = request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion();
+        response.serializeResponse(httpVersion);
         change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
     }
 }

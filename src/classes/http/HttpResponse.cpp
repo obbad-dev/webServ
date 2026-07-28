@@ -342,6 +342,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		const set<string> &allowed = location->getAllowMethods();
 		if (allowed.find(request.getMethod()) == allowed.end())
 		{
+			// throw HttpException(STATUS_METHOD_NOT_ALLOWED);
 			response.buildErrorResponse(HttpException(STATUS_METHOD_NOT_ALLOWED), server);
 			string allowHeader;
 			for (set<string>::const_iterator it = allowed.begin(); it != allowed.end(); ++it)
@@ -372,6 +373,10 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		// 6. File vs Directory Resolution
 		if (stat(physicalPath.c_str(), &pathStat) != 0)
 		{
+		// 	cout << "stat failed for: " << physicalPath << "\n";
+		// 	response.buildErrorResponse(HttpException(STATUS_NOT_FOUND), server);
+		// 	response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+		// 	return ;
 			throw HttpException(STATUS_NOT_FOUND);
 		}
 
@@ -531,12 +536,13 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 			throw HttpException(STATUS_FORBIDDEN);
 		}
 	}
-
-	response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+	const string &version = request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion();
+	response.serializeResponse(version);
 }
 
-void HttpResponse::serializeResponse(string httpVersion)
+void HttpResponse::serializeResponse(const string& httpVersion)
 {
+	// cout << "status_code: " << status_code << ", message: " << message << "\n";
 	response_serialized.clear();
 	response_serialized.append(httpVersion + " " + intToString(status_code) + " " + message + "\r\n");
 	for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)

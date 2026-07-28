@@ -32,7 +32,7 @@ public:
 	void buildErrorResponse(const HttpException &e, const Server &server);
 	// void buildStaticResponse(const HttpRequest& request, const Server& server);
 	void buildStaticResponse(FdManager &manager);
-	void serializeResponse(string httpVersion);
+	void serializeResponse(const string& httpVersion);
 
 	void setStatusCode(int status_code);
 	void setMessage(const string &message);
