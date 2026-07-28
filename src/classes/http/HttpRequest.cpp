@@ -114,11 +114,14 @@ bool HttpRequest::readRequest(int& clientFd)
     char buffer[4096];
     memset(buffer, 0, sizeof(buffer)); 
 
-    ssize_t byteRead = recv(clientFd, buffer, (sizeof(buffer) - 1), 0);
+    ssize_t byteRead = recv(clientFd, buffer, sizeof(buffer), 0);
     if (byteRead == 0)
         return false;
     if (byteRead < 0)
+	{
+		cout << "!!!!!! Error in read: " << strerror(errno) << "\n";
         throw HttpException(ERR_READ);
+	}
 	else
 		raw_buffer.append(buffer, byteRead);
 	return true;
@@ -177,9 +180,53 @@ void HttpRequest::parseBodyContent(string& buffer){
     if (buffer.size() < contentLength) return;
 
     this->bodyContent = buffer.substr(0, contentLength);
-    buffer.erase(0);
+    buffer.erase(0, contentLength);
     is_complete = true;;
 }
+
+// > check my parseRequest is read all request or have a problem in that logic losing data or somthing
+
+// ▸ Thought for 5s, 389 tokens
+//   Prioritizing Tool Usage
+
+// ● Search(Search for parseRequest function) (ctrl+o to expand)
+
+// ▸ Thought for 5s, 378 tokens
+//   Prioritizing Tool Usage
+
+// ● Read(/home/oobbad/Documents/webServ/src/classes/http/HttpRequest.cpp) (ctrl+o to expand)
+
+// ▸ Thought for 1s, 616 tokens
+//   Prioritizing Tool Usage
+
+// ● Read(/home/oobbad/Documents/webServ/src/classes/openConnection/ServerSide.cpp) (ctrl+o to expand)
+
+// ▸ Thought for 18s, 3.7k tokens
+//   Prioritizing Tool Usage
+//   I checked your request parsing logic, and there are indeed a few major problems where you are      
+//   losing data or dropping requests. Here is what is going wrong (without code):
+  
+//   1. You are deleting unhandled data (Losing Pipelined Requests)
+//   In both parseBodyContent and parseChunkedBody, when you finish reading the body you do buffer.     
+//   erase(0). By default, this function deletes the entire remaining string. If a client sends multiple
+//   requests on the same connection very quickly (this is called HTTP Pipelining), the second request  
+//   will be sitting in the buffer right after the first request's body. By calling erase(0), you       
+//   completely wipe out the next request! You should only erase the exact number of bytes you processed
+//   (e.g., erasing exactly contentLength bytes).
+//   2. You drop connections on normal non-blocking behavior
+//   In your readRequest function, if recv() returns -1, you immediately throw a fatal ERR_READ         
+//   exception. Because your sockets are non-blocking, recv() will sometimes return -1 with a specific  
+//   signal (EAGAIN or EWOULDBLOCK) which simply means "the socket is temporarily empty, I have nothing 
+//   to give you right now." Throwing an exception when this happens will violently close perfectly     
+//   healthy connections. You must check if the error is EWOULDBLOCK, and if it is, you should just     
+//   return normally and wait for the next epoll event.
+//   3. You load the entire body into memory before doing anything
+//   Your parseRequest waits until the entire body is downloaded into a single huge string before it    
+//   allows isComplete() to become true and the CGI script to start. If a user uploads a 100 Megabyte   
+//   file, your server will hold 100MB in memory all at once. This isn't strictly "losing data", but it 
+//   will make your server consume enormous amounts of RAM very quickly and likely crash if a few users 
+//   upload files at the same time. Ideally, large bodies should be streamed to a temporary file or     
+//   directly to the CGI script as the data arrives, rather than buffered entirely in RAM. 
 
 void HttpRequest::parseChunkedBody(string& buffer)
 {
@@ -195,7 +242,10 @@ void HttpRequest::parseChunkedBody(string& buffer)
             char *end = NULL;
             long parsed_len = strtol(buffer.substr(0, posEndSize).c_str(), &end, 16);
             if (errno == ERANGE || *end != '\0' || parsed_len < 0)
+			{
+				// cout << "first execpt\n";
                 throw HttpException(ERR_INVALID_HEX_SIZE);
+			}
 
             expectedChunkSize = static_cast<size_t>(parsed_len);
 
@@ -203,6 +253,7 @@ void HttpRequest::parseChunkedBody(string& buffer)
             {
                 buffer.erase(0);
                 is_complete = true;
+				cout << "DEBUG: Finished reading chunked body. Total size: " << bodyContent.size() << " bytes.\n";
                 return;
             }
 
@@ -217,7 +268,10 @@ void HttpRequest::parseChunkedBody(string& buffer)
 
             string content = buffer.substr(0, expectedChunkSize);
             if (buffer.compare(expectedChunkSize, 2, "\r\n") != 0)
+			{
+				// cout << "second execpt\n";
                 throw HttpException(ERR_INVALID_CHUNK_TERM);
+			}
 
             buffer.erase(0, expectedChunkSize + 2);
             bodyContent.append(content);
@@ -247,10 +301,12 @@ bool HttpRequest::parseRequest(int clientFd){
     }
     if (headers_parsed && !is_complete)
     {
-        if (body_type == CHUNKED){
+        if (body_type == CHUNKED)
+		{
             parseChunkedBody(raw_buffer);
         }
-        else if (body_type == CONTENT_LENGTH){
+        else if (body_type == CONTENT_LENGTH)
+		{
             parseBodyContent(raw_buffer);
         }
     }
@@ -273,23 +329,26 @@ bool HttpRequest::parseRequest(int clientFd){
 //     cout << "------------------------------------" << '\n';
 // }
 
-bool HttpRequest::isCgi(const Server& server, string& script_path) const
+bool HttpRequest::isCgi(const Server& server, string& script_path, string& interpreter_path)
 {
     size_t dot_pos = path.find_last_of('.');
 
     if (dot_pos == string::npos) 
 		return false;
     string ext = path.substr(dot_pos);
-
-    const LocationConf* matched_loc = getMatchingLocation(server.getLocations(), path);
+	string path_copy = path;
+    const LocationConf* matched_loc = getMatchingLocation(server.getLocations(), path_copy);
 
     if (matched_loc) {
         const pair<string, string>& cgiPass = matched_loc->getCgiPass();
         if (matched_loc->hasCgiPass() && ext == cgiPass.first) {
             string root = matched_loc->getRoot();
-            realPath(root, path, script_path);
+            realPath(root, path_copy, script_path);
+			// path = path_copy;
+            interpreter_path = cgiPass.second;
             return true;
         }
     }
+
     return false;
 }

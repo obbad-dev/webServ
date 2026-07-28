@@ -68,7 +68,7 @@ public:
     void setProtocolVersion(string version);
 
     bool parseRequest(int clientFd);
-    bool isCgi(const Server& server, string& script_path) const;
+    bool isCgi(const Server& server, string& script_path, string& interpreter_path);
 	void resetRequest() {
 		raw_buffer.clear();
 		method.clear();

@@ -313,13 +313,14 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
     const Server &server = manager.blockServer;
 
 	// 2. Find matching location (Longest Prefix Match)
-	const LocationConf *location = getMatchingLocation(server.getLocations(), request.getPath());
+	string path = request.getPath();
+	const LocationConf *location = getMatchingLocation(server.getLocations(), path);
 	if (location && location->hasClientMaxBodySize())
 	{
-		if (request.getBodyContent().size() > location->getClientMaxBodySize())
+		if (request.getBodyContent().size() > static_cast<size_t>(location->getClientMaxBodySize()))
 			throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
 	}
-	else if (request.getBodyContent().size() > server.getClientMaxBodySize())
+	else if (request.getBodyContent().size() > static_cast<size_t>(server.getClientMaxBodySize()))
 	{
 		throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
 	}
@@ -361,11 +362,16 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	struct stat pathStat;
 	string physicalPath;
 	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
-	if (!realPath(root, request.getPath(), physicalPath))
+	// cout << "root: " << root << "\n";
+	// cout << "path: " << path << "\n";
+
+	if (!realPath(root, path, physicalPath))
 	{
+		// cout << "realPath failed for root: " << root << ", path: " << path << endl;
 		// cout << "forbidden 1\n";
 		throw HttpException(STATUS_FORBIDDEN); // Escaping the root directory structure
 	}
+	// cout << "physicalpath after: " << physicalPath << "\n";
 
 	if (request.getMethod() == "GET")
 	{
@@ -373,10 +379,6 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		// 6. File vs Directory Resolution
 		if (stat(physicalPath.c_str(), &pathStat) != 0)
 		{
-		// 	cout << "stat failed for: " << physicalPath << "\n";
-		// 	response.buildErrorResponse(HttpException(STATUS_NOT_FOUND), server);
-		// 	response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
-		// 	return ;
 			throw HttpException(STATUS_NOT_FOUND);
 		}
 
@@ -396,7 +398,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 				struct stat indexStat;
 				if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
 				{
-					cout << "enter the if\n";
+					// cout << "enter the if\n";
 					physicalPath = testIndex;
 					indexFound = true;
 					break;
@@ -408,7 +410,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 				// cout << "index not found\n";
 				if (location && location->hasAutoindex())
 				{
-					string listing = generateDirectoryListing(physicalPath, request.getPath());
+					string listing = generateDirectoryListing(physicalPath, path);
 					if (listing.empty())
 					{
 						// cout << "Server error 1\n";
@@ -425,7 +427,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 				else
 				{
 					// cout << "forbidden 2\n";
-					throw HttpException(STATUS_FORBIDDEN);
+					throw HttpException(STATUS_NOT_FOUND);
 				}
 			}
 		}
@@ -671,16 +673,22 @@ void HttpResponse::resetObjectResponse() {
 	response_body.clear();
 	bytesSent = 0; 
 }
+
 int HttpResponse::send_response(int fd)
 {
 	ssize_t n = send(fd, (response_serialized.data() + bytesSent), (response_serialized.size() - bytesSent), 0);
 
 	if (n == -1)
 	{
+		// cout << "!!!!!! Error sending response to client: " << strerror(errno) << std::endl;
 		return -1;
 	}
-	bytesSent += n;
 
-	return 1;
+	bytesSent += n;
+	// cout << "DEBUG: Sent " << bytesSent << "/" << response_serialized.size() << std::endl;
+	if (bytesSent >= response_serialized.size())
+		return 1;
+
+	return 0;
 }
 

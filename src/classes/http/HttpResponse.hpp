@@ -43,7 +43,7 @@ public:
 	const map<string, string> &getResponseHeaders() const;
 	const string &getResponseBody() const;
 
-	static void prepareCGI(FdManager &fdManager, const string &cgiPath);
+	static void prepareCGI(FdManager &fdManager, const string &scriptPath, const string &interpreterPath);
 	static void excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events);
 	void parseCgiOutput();
 	int send_response(int fd);

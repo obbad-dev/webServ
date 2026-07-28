@@ -132,29 +132,29 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
         // Check if the request is fully received and parsed
         if (request.isComplete())
         {
-            string cgi_path; 
-            bool is_cgi = request.isCgi(it->second.blockServer, cgi_path);
+
+            string script_path; 
+			string interpreter_path;
+            bool is_cgi = request.isCgi(it->second.blockServer, script_path, interpreter_path);
 
             if (is_cgi)
             {
-                // Prepare pipes and fork the CGI process
-                response.prepareCGI(it->second, cgi_path);
+                response.prepareCGI(it->second, script_path, interpreter_path);
                 // Map both ends of the CGI pipe back to this client's file descriptor
 				cgiToClient[it->second.from_cgi_fd] = client_fd;
 				if (it->second.stat_fd_to_cgi == NOT_FINISHED)
                 	cgiToClient[it->second.to_cgi_fd] = client_fd;
             }
-            else
+            else if (!is_cgi)
             {
+				// cout << "Static request detected. Building static response.\n";
                 response.buildStaticResponse(it->second);
                 change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
             }
-        }
+		}
     }
     catch (const HttpException& e)
     {
-        std::cout << "DEBUG: caught HttpException in handleClientInput!\n";
-        // Handle any errors thrown during parsing or building the response
         response.buildErrorResponse(e, it->second.blockServer);
         const string& httpVersion = request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion();
         response.serializeResponse(httpVersion);
@@ -191,8 +191,6 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
     }
     catch (const HttpException& e)
     {
-        // std::cout << "DEBUG: caught HttpException in handleCgiEvent!\n";
-        // If the CGI process fails, build an HTTP error response (e.g. 500)
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         cgiToClient.erase(it->second.to_cgi_fd);
         cgiToClient.erase(it->second.from_cgi_fd);
@@ -210,9 +208,10 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
 {
     // Attempt to send the serialized HTTP response over the socket
     int ret = it->second.response.send_response(client_fd);
-    
+
     if (ret == -1)
     {
+		// cout << "client discnnected\n";
         disconnect_client(client_fd, it->second);
         fds.erase(client_fd);
     }
@@ -220,19 +219,21 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
     {
         // The entire response was successfully sent
         it->second.lastActivity = time(NULL);
-        
+    
         // Switch back to listening for new requests on this connection (Keep-Alive)
-        change_epoll_event(epoll_fd, client_fd, EPOLLIN);
         if (!it->second.request.isKeepAlive())
         {
             // If the client requested Connection: close, disconnect immediately
+			// cout << "not keep alive\n";
             disconnect_client(client_fd, it->second);
             fds.erase(client_fd);
         }
         else
         {
+			// cout << "reseted the object\n";
             it->second.reset();
         }
+        change_epoll_event(epoll_fd, client_fd, EPOLLIN);
     }
 }
 
@@ -297,14 +298,17 @@ void ServerSide::communication_part()
             }
             else if (cgi_it != cgiToClient.end())
             {
+				// std::cout << "CGI EVENT DETECTED\n";
                 handleCgiEvent(epoll_fd, client_fd, current_fd, event_arr[i].events, manager_it);
             }
             else if (event_arr[i].events & EPOLLIN)
             {
+				// std::cout << "CLIENT INPUT EVENT DETECTED\n";
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
             else if (event_arr[i].events & EPOLLOUT)
             {
+				// std::cout << "CLIENT OUTPUT EVENT DETECTED\n";
                 handleClientOutput(epoll_fd, client_fd, manager_it);
             }
         }

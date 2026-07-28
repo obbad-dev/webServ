@@ -18,6 +18,8 @@ static std::vector<std::string> split(const std::string& path)
 
 static bool resolveParts(const std::vector<std::string>& input, std::vector<std::string>& output, bool rejectEscape = false, size_t minDepth = 0)
 {
+	if (input.empty())
+        return true;
     for (size_t i = 0; i < input.size(); ++i)
     {
         const std::string& part = input[i];

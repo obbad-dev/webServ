@@ -20,7 +20,7 @@ using namespace std;
 #include "HttpResponse.hpp"
 #include "ParseConfig.hpp"
 
-#define TIMEOUT 120
+#define TIMEOUT 100000
 
 enum CONN_TYPE { SERVER, CLIENT };
 enum STATCGI { NOT_FINISHED, FINISHED };

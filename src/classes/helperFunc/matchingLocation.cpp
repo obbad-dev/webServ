@@ -1,6 +1,6 @@
 #include "helperFunc.hpp"
 
-const LocationConf* getMatchingLocation(const std::vector<LocationConf>& locations, const std::string& path) {
+const LocationConf* getMatchingLocation(const std::vector<LocationConf>& locations, std::string& path) {
 	const LocationConf* bestMatch = NULL;
 	size_t bestMatchLength = 0;
 
@@ -14,6 +14,9 @@ const LocationConf* getMatchingLocation(const std::vector<LocationConf>& locatio
 				bestMatchLength = locationPath.length();
 			}
 		}
+	}
+	if (bestMatch){
+		path.erase(0, bestMatch->getPath().length());
 	}
 
 	return bestMatch;
