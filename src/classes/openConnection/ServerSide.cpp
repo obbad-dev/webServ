@@ -132,7 +132,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
         // Check if the request is fully received and parsed
         if (request.isComplete())
         {
-
+            cout << "Request is: " << request.getPath() << endl;
             string script_path; 
 			string interpreter_path;
             bool is_cgi = request.isCgi(it->second.blockServer, script_path, interpreter_path);
