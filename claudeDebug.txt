@@ -1,0 +1,83 @@
+Two bugs, chained. Both confirmed with a minimal reproducer.
+
+Bug 1 — chunked body is declared complete one CRLF too early (this causes the "bad status code")
+
+src/classes/http/HttpRequest.cpp:252-258
+
+if (expectedChunkSize == 0)
+{
+    buffer.erase(0, expectedChunkSize );   // erases ZERO bytes
+    is_complete = true;
+    return;
+}
+
+The tester (Go client) sends Transfer-Encoding: chunked, never Content-Length — that's why your curl tests pass and the tester fails. A chunked body ends with 0\r\n\r\n. Your code declares the request complete as soon as it sees 0\r\n, and never consumes the final \r\n. Go writes that trailing \r\n in a separate write(), so it usually arrives after you've already answered and called reset().
+
+That orphaned \r\n then becomes the first two bytes of the next request on the keep-alive connection:
+
+raw_buffer = "\r\n" + "POST /post_body HTTP/1.1\r\n..."
+
+parseHeaders (HttpRequest.cpp:133-143) takes everything before the first \r\n as the request line — that's the empty string — methodEnd == npos → throw ERR_NO_METHOD → 400 Bad Request.
+
+This is exactly why POST /post_body with a size of 0 passes and the very next test, size of 100, fails: the size-0 test is the one that leaves the stray CRLF behind.
+
+Also note buffer.erase(0, expectedChunkSize) erases 0 bytes — it should erase the last-chunk line. It's masked today only because resetRequest() clears raw_buffer, but it will corrupt pipelined requests.
+
+Fix: don't set is_complete until the terminator after the 0 line is in the buffer, then erase through it:
+
+if (expectedChunkSize == 0)
+{
+    size_t endTrailers = buffer.find("\r\n", posEndSize + 2);
+    if (endTrailers == string::npos)
+        return;                          // wait for more data
+    buffer.erase(0, endTrailers + 2);
+    is_complete = true;
+    return;
+}
+
+Bug 2 — Epoll_ctl_mod failed: EPOLL_sed
+
+src/classes/openConnection/ServerSid
+
+else if (ret == 1)
+{
+    if (!it->second.request.isKeepAl
+    {
+        disconnect_client(client_fd,m_epoll + close(fd)
+        fds.erase(client_fd);
+    }
+    else
+    {
+        it->second.reset();
+    }
+    change_epoll_event(epoll_fd, cli33 — runs in BOTH branches
+}
+
+Line 233 runs unconditionally, inclu→ epoll_ctl returns EBADF → throw
+runtime_error("Epoll_ctl_mod failed"t() → main catches it and exits. Any
+non-keep-alive response kills the whConnection: close"
+http://localhost:8080/ does it.
+
+Fix: move it inside the else:
+
+else
+{
+    it->second.reset();
+    change_epoll_event(epoll_fd, cli
+}
+
+How they chain
+
+Bug 1 produces the 400 → the 400 pat 2 fires on the close → server exits.
+That's why you see "bad status code"
+
+Verified
+
+Reproducer (chunked size-0 POST, thethe same connection) against your
+current build:
+
+RESPONSE 1: HTTP/1.1 200 OK
+RESPONSE 2: HTTP/1.1 400 Bad Requesttus code"
+server log: Epoll_ctl_mod failedWith both fixes applied to a scratchOK / 200 OK, and the official testercleared all four /post_body tests (so FATAL ERROR, continuing into thestress phase with the server still alive. Your working tree was not modified.                       
+One thing to flag: you changed client_max_body_size in /post_body to 100K. The tester's banner says "/post_body must answer anything to f 100", and it probes sizes 101 and200 expecting a rejection — 100K will let those through. My verification run used 100.
+Worked for 28m 43srecap: Goal was to find why the 42 tfailed and the server crashed. Iidentified both bugs and verified fiapply the two fixes to your source.(disable recaps in /config)
