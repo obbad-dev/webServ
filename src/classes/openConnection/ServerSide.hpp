@@ -5,7 +5,7 @@ using namespace std;
 #include <string>
 #include <sys/epoll.h>
 
-#include <arpa/inet.h> 
+#include <arpa/inet.h>
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -23,20 +23,30 @@ using namespace std;
 
 #define TIMEOUT 100000
 
-enum CONN_TYPE { SERVER, CLIENT };
-enum STATCGI { NOT_FINISHED, FINISHED };
+enum CONN_TYPE
+{
+  SERVER,
+  CLIENT
+};
+enum STATCGI
+{
+  NOT_FINISHED,
+  FINISHED
+};
 
 extern int sig;
 
-struct FdManager {
+struct FdManager
+{
   Listen listen;
   time_t lastActivity;
   CONN_TYPE type;
   HttpRequest request;
   HttpResponse response;
   const Server &blockServer;
-  std::vector<std::string>
-      env_vars; 
+  std::vector<std::string> env_vars;
+  LocationConf *location;
+  string target_path;
 
   int epollFd;
   static map<string, string> extensions;
@@ -51,47 +61,45 @@ struct FdManager {
 
   FdManager(CONN_TYPE _type, time_t _lastActivity, const Server &_blockServer,
             int &_epollFd, const Listen &_listen)
-      : listen(_listen), blockServer(_blockServer), epollFd(_epollFd) {
+      : listen(_listen), blockServer(_blockServer), epollFd(_epollFd)
+  {
     type = _type;
     lastActivity = _lastActivity;
     cgi_state = FINISHED;
-	stat_fd_to_cgi = FINISHED;
-	stat_fd_from_cgi = FINISHED;
+    stat_fd_to_cgi = FINISHED;
+    stat_fd_from_cgi = FINISHED;
     cgi_bytes_written = 0;
     to_cgi_fd = -1;
     from_cgi_fd = -1;
-    
+    location = NULL;
   }
 
-  void reset() {
-	
-	request.resetRequest();
-	response.resetObjectResponse();
-	cgi_state = FINISHED;
-	to_cgi_fd = -1;
-	from_cgi_fd = -1;
-	stat_fd_to_cgi = FINISHED;
-	stat_fd_from_cgi = FINISHED;
-	cgi_bytes_written = 0;
+  void reset()
+  {
+    request.resetRequest();
+    response.resetObjectResponse();
+    cgi_state = FINISHED;
+    to_cgi_fd = -1;
+    from_cgi_fd = -1;
+    stat_fd_to_cgi = FINISHED;
+    stat_fd_from_cgi = FINISHED;
+    cgi_bytes_written = 0;
+    target_path.clear();
   }
 };
 
-class ServerSide {
+class ServerSide
+{
 private:
   const vector<Server> &servers;
   map<int, FdManager> fds;
   map<int, int> cgiToClient;
   map<int, HttpRequest> httpRequests;
 
-  
-  void acceptNewConnections(int epoll_fd, int server_fd,
-                            FdManager &serverManager);
-  void handleClientInput(int epoll_fd, int client_fd,
-                         map<int, FdManager>::iterator &it);
-  void handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_t events,
-                      map<int, FdManager>::iterator &it);
-  void handleClientOutput(int epoll_fd, int client_fd,
-                          map<int, FdManager>::iterator &it);
+  void acceptNewConnections(int epoll_fd, int server_fd, FdManager &serverManager);
+  void handleClientInput(int epoll_fd, int client_fd, FdManager &manager);
+  void handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_t events, FdManager &manager);
+  void handleClientOutput(int epoll_fd, int client_fd, FdManager &manager);
   void handleClientTimeouts();
 
 public:

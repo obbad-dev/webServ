@@ -301,7 +301,6 @@ bool getDataFromRequest(string &filename, string &filebody, const string &reques
 		else if (request_body[body_end - 1] == '\n')
 			body_end -= 1;
 	}
-
 	filebody = request_body.substr(body_start, body_end - body_start);
 	return true;
 }
@@ -313,18 +312,9 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
     const Server &server = manager.blockServer;
 
 	
-	string path = request.getPath();
-	const LocationConf *location = getMatchingLocation(server.getLocations(), path);
-	if (location && location->hasClientMaxBodySize())
-	{
-		if (request.getBodyContent().size() > static_cast<size_t>(location->getClientMaxBodySize()))
-			throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
-	}
-	else if (request.getBodyContent().size() > static_cast<size_t>(server.getClientMaxBodySize()))
-	{
-		throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
-	}
-	
+	string &path = manager.target_path;
+	const LocationConf *location = manager.location;
+
 	if (location && location->hasReturn())
 	{
 		pair<int, string> redir = location->getReturn();
@@ -336,10 +326,8 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		return;
 	}
 
-	
 	if (location)
 	{
-		
 		const set<string> &allowed = location->getAllowMethods();
 		if (allowed.find(request.getMethod()) == allowed.end())
 		{
@@ -357,8 +345,6 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 			return;
 		}
 	}
-
-	
 	struct stat pathStat;
 	string physicalPath;
 	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
@@ -367,24 +353,16 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 
 	if (!realPath(root, path, physicalPath))
 	{
-		
-		
 		throw HttpException(STATUS_FORBIDDEN); 
 	}
-	
-
 	if (request.getMethod() == "GET")
 	{
-		
-		
 		if (stat(physicalPath.c_str(), &pathStat) != 0)
 		{
 			throw HttpException(STATUS_NOT_FOUND);
 		}
-
 		if (S_ISDIR(pathStat.st_mode))
 		{
-			
 			const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
 			bool indexFound = false;
 			for (size_t i = 0; i < indexes.size(); ++i)
@@ -393,12 +371,9 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 				if (testIndex[testIndex.size() - 1] != '/')
 					testIndex += "/";
 				testIndex += indexes[i];
-
-				
 				struct stat indexStat;
 				if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
 				{
-					
 					physicalPath = testIndex;
 					indexFound = true;
 					break;
@@ -426,7 +401,6 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 				}
 				else
 				{
-					
 					throw HttpException(STATUS_NOT_FOUND);
 				}
 			}
@@ -462,8 +436,6 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		if (location && location->uploadEnabledStatus())
 		{
 			string uploadDir = location->getUploadPath();
-			
-			
 
 			if (stat(uploadDir.c_str(), &pathStat) == 0 && !S_ISDIR(pathStat.st_mode))
 				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);

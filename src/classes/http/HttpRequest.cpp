@@ -11,8 +11,11 @@
 #include "HttpException.hpp"
 #include "Server.hpp"
 #include "helperFunc.hpp"
+#include "ServerSide.hpp"
+// struct FdManager;
 
-HttpRequest::HttpRequest(): method(""), path("") {
+HttpRequest::HttpRequest() : method(""), path("")
+{
     headers_parsed = false;
     contentLength = 0;
     expectedChunkSize = 0;
@@ -23,22 +26,26 @@ HttpRequest::HttpRequest(): method(""), path("") {
 }
 HttpRequest::~HttpRequest() {}
 
-const map<string, string>& HttpRequest::getHeaders() const
+const map<string, string> &HttpRequest::getHeaders() const
 {
     return this->headers;
 }
-const string& HttpRequest::getMethod() const {
+const string &HttpRequest::getMethod() const
+{
     return this->method;
 }
-const string& HttpRequest::getPath() const {
+const string &HttpRequest::getPath() const
+{
     return this->path;
 }
-const string& HttpRequest::getProtocolVersion() const{
+const string &HttpRequest::getProtocolVersion() const
+{
     return this->protocolVersion;
 }
 bool HttpRequest::isKeepAlive() const { return _keep_alive; }
 
-void HttpRequest::setHeaders(string key, string value){
+void HttpRequest::setHeaders(string key, string value)
+{
     while (value[0] == ' ' || value[0] == '\t')
     {
         value.erase(0, 1);
@@ -46,25 +53,28 @@ void HttpRequest::setHeaders(string key, string value){
     transform(key.begin(), key.end(), key.begin(), ::tolower);
     headers[key] = value;
 }
-void HttpRequest::setMethod(string method){
+void HttpRequest::setMethod(string method)
+{
     if (method.empty())
         throw HttpException(STATUS_METHOD_NOT_ALLOWED);
     this->method = method;
 }
-void HttpRequest::setTarget(string target){
-	if (target.empty() || target[0] != '/')
-		throw HttpException(ERR_INVALID_TARGET);
-	
-	size_t pos = target.find("?");
-	if (pos != string::npos)
-	{
-		this->path = target.substr(0, pos);
-		this->queryString = target.substr(pos + 1);
-	}
-	else{
-    	this->path = target;
-		this->queryString = "";
-	}
+void HttpRequest::setTarget(string target)
+{
+    if (target.empty() || target[0] != '/')
+        throw HttpException(ERR_INVALID_TARGET);
+
+    size_t pos = target.find("?");
+    if (pos != string::npos)
+    {
+        this->path = target.substr(0, pos);
+        this->queryString = target.substr(pos + 1);
+    }
+    else
+    {
+        this->path = target;
+        this->queryString = "";
+    }
 }
 void HttpRequest::setProtocolVersion(string version)
 {
@@ -77,10 +87,12 @@ void HttpRequest::setProtocolVersion(string version)
 
 void HttpRequest::setBodyType()
 {
-    if (headers.find("transfer-encoding") != headers.end() && headers["transfer-encoding"] == "chunked"){
+    if (headers.find("transfer-encoding") != headers.end() && headers["transfer-encoding"] == "chunked")
+    {
         body_type = CHUNKED;
     }
-    else if (headers.find("content-length") != headers.end()){
+    else if (headers.find("content-length") != headers.end())
+    {
         body_type = CONTENT_LENGTH;
         char *endPtr;
         errno = 0;
@@ -89,45 +101,45 @@ void HttpRequest::setBodyType()
             throw HttpException(ERR_INVALID_CONTENT_LEN);
         contentLength = number;
     }
-    else{
+    else
+    {
         body_type = NONE;
         is_complete = true;
     }
 }
 
-void HttpRequest::determineConnectionStatus() 
+void HttpRequest::determineConnectionStatus()
 {
     if (headers.find("connection") != headers.end())
     {
         if (headers["connection"] == "keep-alive")
             _keep_alive = true;
-	}
-	else if (protocolVersion == "HTTP/1.1")
-	{
-		_keep_alive = true;
+    }
+    else if (protocolVersion == "HTTP/1.1")
+    {
+        _keep_alive = true;
     }
 }
 
-bool HttpRequest::readRequest(int& clientFd)
+bool HttpRequest::readRequest(int &clientFd)
 {
     char buffer[4096];
-    memset(buffer, 0, sizeof(buffer)); 
+    memset(buffer, 0, sizeof(buffer));
 
     ssize_t byteRead = recv(clientFd, buffer, sizeof(buffer), 0);
     if (byteRead == 0)
         return false;
     if (byteRead < 0)
-	{
-		cout << "!!!!!! Error in read: " << strerror(errno) << "\n";
+    {
+        cout << "!!!!!! Error in read: " << strerror(errno) << "\n";
         throw HttpException(ERR_READ);
-	}
-	else
-		raw_buffer.append(buffer, byteRead);
-	return true;
-	
+    }
+    else
+        raw_buffer.append(buffer, byteRead);
+    return true;
 }
 
-void HttpRequest::parseHeaders(string& buffer)
+void HttpRequest::parseHeaders(string &buffer)
 {
     size_t pos = buffer.find("\r\n");
     if (pos == string::npos)
@@ -173,16 +185,16 @@ void HttpRequest::parseHeaders(string& buffer)
     }
 }
 
-void HttpRequest::parseBodyContent(string& buffer){
-
-    if (buffer.size() < contentLength) return;
-
+void HttpRequest::parseBodyContent(string &buffer) 
+{
+    if (buffer.size() < contentLength)
+        return;
     this->bodyContent = buffer.substr(0, contentLength);
     buffer.erase(0, contentLength);
-    is_complete = true;;
+    is_complete = true;
 }
 
-void HttpRequest::parseChunkedBody(string& buffer)
+void HttpRequest::parseChunkedBody(string &buffer)
 {
     while (!buffer.empty())
     {
@@ -196,9 +208,9 @@ void HttpRequest::parseChunkedBody(string& buffer)
             char *end = NULL;
             long parsed_len = strtol(buffer.substr(0, posEndSize).c_str(), &end, 16);
             if (errno == ERANGE || *end != '\0' || parsed_len < 0)
-			{	
+            {
                 throw HttpException(ERR_INVALID_HEX_SIZE);
-			}
+            }
             expectedChunkSize = static_cast<size_t>(parsed_len);
 
             if (expectedChunkSize == 0)
@@ -208,14 +220,12 @@ void HttpRequest::parseChunkedBody(string& buffer)
                     return;
                 buffer.erase(0);
                 is_complete = true;
-				cout << "DEBUG: Finished reading chunked body. Total size: " << bodyContent.size() << " bytes.\n";
+                cout << "DEBUG: Finished reading chunked body. Total size: " << bodyContent.size() << " bytes.\n";
                 return;
             }
-
             buffer.erase(0, posEndSize + 2);
             chunk_state = READ_DATA;
         }
-
         if (chunk_state == READ_DATA)
         {
             if (buffer.size() < expectedChunkSize + 2)
@@ -223,20 +233,41 @@ void HttpRequest::parseChunkedBody(string& buffer)
 
             string content = buffer.substr(0, expectedChunkSize);
             if (buffer.compare(expectedChunkSize, 2, "\r\n") != 0)
-			{
-				
+            {
                 throw HttpException(ERR_INVALID_CHUNK_TERM);
-			}
-
+            }
             buffer.erase(0, expectedChunkSize + 2);
             bodyContent.append(content);
+            if (bodyContent.size() > client_max_body_size)
+            {
+                throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
+            }
             chunk_state = READ_SIZE;
         }
     }
 }
 
+void HttpRequest::determineClientMaxBodySize(FdManager &fdManager)
+{
+    fdManager.target_path = fdManager.request.getPath();
+    fdManager.location = const_cast<LocationConf*>(getMatchingLocation(fdManager.blockServer.getLocations(), fdManager.target_path));
 
-bool HttpRequest::parseRequest(int clientFd){
+    if (fdManager.location && fdManager.location->hasClientMaxBodySize())
+    {
+        this->client_max_body_size = static_cast<size_t>(fdManager.location->getClientMaxBodySize());
+    }
+    else if (fdManager.blockServer.hasSetClientMaxBodySize())
+    {
+        this->client_max_body_size = static_cast<size_t>(fdManager.blockServer.getClientMaxBodySize());
+    }
+    if (body_type == CONTENT_LENGTH && contentLength > client_max_body_size)
+    {
+        throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
+    }
+}
+
+bool HttpRequest::parseRequest(int clientFd, FdManager &fdManager)
+{
 
     if (!readRequest(clientFd))
         return false;
@@ -244,62 +275,48 @@ bool HttpRequest::parseRequest(int clientFd){
     if (!headers_parsed)
     {
         size_t end_headers = raw_buffer.find("\r\n\r\n");
-        if (end_headers == string::npos){
+        if (end_headers == string::npos)
+        {
             return true;
         }
         string headerBuffer = raw_buffer.substr(0, end_headers + 2);
         parseHeaders(headerBuffer);
         raw_buffer.erase(0, end_headers + 4);
-        headers_parsed = true;
         setBodyType();
-		determineConnectionStatus();
+        determineConnectionStatus();
+        determineClientMaxBodySize(fdManager);
+        headers_parsed = true;
     }
     if (headers_parsed && !is_complete)
     {
         if (body_type == CHUNKED)
-		{
+        {
             parseChunkedBody(raw_buffer);
         }
         else if (body_type == CONTENT_LENGTH)
-		{
+        {
             parseBodyContent(raw_buffer);
         }
     }
-
     return true;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-bool HttpRequest::isCgi(const Server& server, string& script_path, string& interpreter_path)
+bool HttpRequest::isCgi(string &script_path, string &interpreter_path, FdManager &manager)
 {
     size_t dot_pos = path.find_last_of('.');
 
-    if (dot_pos == string::npos) 
-		return false;
+    if (dot_pos == string::npos)
+        return false;
     string ext = path.substr(dot_pos);
-	string path_copy = path;
-    const LocationConf* matched_loc = getMatchingLocation(server.getLocations(), path_copy);
+    string &path_copy = manager.target_path;
 
-    if (matched_loc) {
-        const pair<string, string>& cgiPass = matched_loc->getCgiPass();
-        if (matched_loc->hasCgiPass() && ext == cgiPass.first) {
-            string root = matched_loc->getRoot();
+    if (manager.location)
+    {
+        const pair<string, string> &cgiPass = manager.location->getCgiPass();
+        if (manager.location->hasCgiPass() && ext == cgiPass.first)
+        {
+            string root = manager.location->getRoot();
             realPath(root, path_copy, script_path);
-			
             interpreter_path = cgiPass.second;
             return true;
         }
