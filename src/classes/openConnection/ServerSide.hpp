@@ -53,7 +53,7 @@ struct FdManager {
       : listen(_listen), blockServer(_blockServer), epollFd(_epollFd) {
     type = _type;
     lastActivity = _lastActivity;
-    cgi_state = NOT_FINISHED;
+    cgi_state = FINISHED;
 	stat_fd_to_cgi = NOT_FINISHED;
 	stat_fd_from_cgi = NOT_FINISHED;
     cgi_bytes_written = 0;
@@ -66,7 +66,7 @@ struct FdManager {
 	// lastActivity = time(NULL);
 	request.resetRequest();
 	response.resetObjectResponse();
-	cgi_state = NOT_FINISHED;
+	cgi_state = FINISHED;
 	to_cgi_fd = -1;
 	from_cgi_fd = -1;
 	stat_fd_to_cgi = NOT_FINISHED;

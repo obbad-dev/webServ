@@ -519,7 +519,13 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		}
 		else
 		{
-			throw HttpException(STATUS_METHOD_NOT_ALLOWED);
+			response.setStatusCode(200);
+			response.setMessage("OK");
+			response.setResponseHeader("Content-Type", "text/plain");
+			string bodyContent = "POST request received";
+			response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
+			response.setResponseBody(bodyContent);
+			// throw HttpException(STATUS_METHOD_NOT_ALLOWED);
 		}
 	}
 	else if (request.getMethod() == "DELETE")

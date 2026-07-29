@@ -139,6 +139,8 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
 
             if (is_cgi)
             {
+				if (it->second.cgi_state == NOT_FINISHED)
+					return ;
                 response.prepareCGI(it->second, script_path, interpreter_path);
                 // Map both ends of the CGI pipe back to this client's file descriptor
 				cgiToClient[it->second.from_cgi_fd] = client_fd;
@@ -194,11 +196,6 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
         it->second.response.buildErrorResponse(e, it->second.blockServer);
         cgiToClient.erase(it->second.to_cgi_fd);
         cgiToClient.erase(it->second.from_cgi_fd);
-		it->second.stat_fd_to_cgi = NOT_FINISHED;
-		it->second.stat_fd_from_cgi = NOT_FINISHED;
-		it->second.to_cgi_fd = -1;
-		it->second.from_cgi_fd = -1;
-		it->second.cgi_state = NOT_FINISHED;
 		it->second.response.serializeResponse(it->second.request.getProtocolVersion());
 		change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
     }

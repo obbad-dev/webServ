@@ -38,6 +38,9 @@ public:
 	void setMessage(const string &message);
 	void setResponseHeader(const string &key, const string &value);
 	void setResponseBody(const string &body);
+	void setResponseBody(const char* buffer, size_t size){
+		response_body.append(buffer, size);
+	}
 	int getStatusCode() const;
 	const string &getMessage() const;
 	const map<string, string> &getResponseHeaders() const;

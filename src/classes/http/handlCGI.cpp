@@ -31,7 +31,22 @@ void makeEnvVars(FdManager &fdManager)
 	env_vars.push_back("SERVER_PROTOCOL=" + fdManager.request.getProtocolVersion());
 	env_vars.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env_vars.push_back("SERVER_SOFTWARE=webServ/1.0");
+
+	// Add all HTTP headers as HTTP_ variables (RFC 3875)
+	for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+	{
+		string key = "HTTP_" + it->first;
+		for (size_t i = 0; i < key.length(); ++i)
+		{
+			if (key[i] >= 'a' && key[i] <= 'z')
+				key[i] = key[i] - 32; // to upper
+			else if (key[i] == '-')
+				key[i] = '_';
+		}
+		env_vars.push_back(key + "=" + it->second);
+	}
 }
+
 
 static bool interpreterIsExecutable(const std::string &interpreterPath)
 {
@@ -175,7 +190,7 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const string &scriptName, co
 		fdManager.from_cgi_fd = from_cgi_fd[READ];
 
 		fdManager.cgi_pid = pid;
-		
+		fdManager.cgi_state = NOT_FINISHED;
 		ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.from_cgi_fd, EPOLLIN);
 		if (fdManager.request.getBodyContent().empty()){
 			close(fdManager.to_cgi_fd);
@@ -227,7 +242,7 @@ static void finishCgiRead(FdManager &fdManager)
 
 static void handleCGIRead(FdManager &fdManager)
 { 
-	char buffer[65535]; // 64KB buffer
+	char buffer[65536]; // 64KB buffer
 	memset(buffer, 0, sizeof(buffer));
 	ssize_t bytes_read = read(fdManager.from_cgi_fd, buffer, sizeof(buffer));
 
@@ -248,7 +263,7 @@ static void handleCGIRead(FdManager &fdManager)
 		return;
 	}
 	HttpResponse &response = fdManager.response;
-	response.setResponseBody(response.getResponseBody() + std::string(buffer, bytes_read));
+	response.setResponseBody(buffer, bytes_read);
 	
 }
 
