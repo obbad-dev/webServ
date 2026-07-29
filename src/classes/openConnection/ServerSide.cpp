@@ -229,8 +229,8 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdMana
         {
 			// cout << "reseted the object\n";
             it->second.reset();
+            change_epoll_event(epoll_fd, client_fd, EPOLLIN);
         }
-        change_epoll_event(epoll_fd, client_fd, EPOLLIN);
     }
 }
 

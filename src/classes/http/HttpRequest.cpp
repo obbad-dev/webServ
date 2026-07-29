@@ -251,6 +251,9 @@ void HttpRequest::parseChunkedBody(string& buffer)
 
             if (expectedChunkSize == 0)
             {
+                size_t endTrailers = buffer.find("\r\n", posEndSize + 2);
+                if (endTrailers == string::npos)
+                    return;
                 buffer.erase(0);
                 is_complete = true;
 				cout << "DEBUG: Finished reading chunked body. Total size: " << bodyContent.size() << " bytes.\n";
