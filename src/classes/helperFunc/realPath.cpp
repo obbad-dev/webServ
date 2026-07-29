@@ -75,15 +75,15 @@ bool realPath(const std::string& root, const std::string& uri, std::string& resu
     return true;
 }
 
-// #include <iostream>
-// int main ()
-// {
-//     std::string root = "resources/var/../images"; // /resources/images
-//     std::string uri = "/png/../";
-//     std::string result;
 
-//     if (realPath(root, uri, result))
-//         std::cout << result << std::endl;
-// }
+
+
+
+
+
+
+
+
+
 
 

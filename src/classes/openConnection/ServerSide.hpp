@@ -5,7 +5,7 @@ using namespace std;
 #include <string>
 #include <sys/epoll.h>
 
-#include <arpa/inet.h> //not allowed
+#include <arpa/inet.h> 
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -14,6 +14,7 @@ using namespace std;
 #include <stdexcept>
 #include <sys/socket.h>
 #include <csignal>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "HttpRequest.hpp"
@@ -35,7 +36,7 @@ struct FdManager {
   HttpResponse response;
   const Server &blockServer;
   std::vector<std::string>
-      env_vars; // Array to hold environment variables for CGI
+      env_vars; 
 
   int epollFd;
   static map<string, string> extensions;
@@ -54,23 +55,23 @@ struct FdManager {
     type = _type;
     lastActivity = _lastActivity;
     cgi_state = FINISHED;
-	stat_fd_to_cgi = NOT_FINISHED;
-	stat_fd_from_cgi = NOT_FINISHED;
+	stat_fd_to_cgi = FINISHED;
+	stat_fd_from_cgi = FINISHED;
     cgi_bytes_written = 0;
     to_cgi_fd = -1;
     from_cgi_fd = -1;
-    // pid_t cgi_pid = -1;
+    
   }
 
   void reset() {
-	// lastActivity = time(NULL);
+	
 	request.resetRequest();
 	response.resetObjectResponse();
 	cgi_state = FINISHED;
 	to_cgi_fd = -1;
 	from_cgi_fd = -1;
-	stat_fd_to_cgi = NOT_FINISHED;
-	stat_fd_from_cgi = NOT_FINISHED;
+	stat_fd_to_cgi = FINISHED;
+	stat_fd_from_cgi = FINISHED;
 	cgi_bytes_written = 0;
   }
 };
@@ -82,7 +83,7 @@ private:
   map<int, int> cgiToClient;
   map<int, HttpRequest> httpRequests;
 
-  // void debug();
+  
   void acceptNewConnections(int epoll_fd, int server_fd,
                             FdManager &serverManager);
   void handleClientInput(int epoll_fd, int client_fd,

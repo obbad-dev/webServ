@@ -30,7 +30,7 @@ public:
 	static string getDefaultStatusMessage(int status_code);
 	static string getDefaultErrorPage(int status_code, string message);
 	void buildErrorResponse(const HttpException &e, const Server &server);
-	// void buildStaticResponse(const HttpRequest& request, const Server& server);
+	
 	void buildStaticResponse(FdManager &manager);
 	void serializeResponse(const string& httpVersion);
 

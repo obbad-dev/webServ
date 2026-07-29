@@ -9,30 +9,29 @@ class Server;
 class HttpRequest
 {
 private:
-//* buffer Reading
+
     string raw_buffer;
 
-//* Request Line
     string method;
     string path;
     string protocolVersion;
 	string queryString;
 
-//* headers 
+
     bool headers_parsed;
     map<string, string> headers;
 
     bool _keep_alive;
-//* Body Type
+
     enum BodyType { NONE, CONTENT_LENGTH, CHUNKED } body_type;
-//* Body
+
     string bodyContent;
     size_t contentLength;
     size_t expectedChunkSize;
-//* Request Completion
+
     bool is_complete;
 
-//* Private Methods
+
     void determineConnectionStatus();
     void setBodyType();
     bool readRequest(int &clientFd);
@@ -41,7 +40,7 @@ private:
     void parseHeaders(string& buffer);
     void debug();
 
-//* for debuging
+
     bool debuging;
 
     enum ChunkState { READ_SIZE, READ_DATA };
@@ -51,7 +50,7 @@ public:
     HttpRequest();
     ~HttpRequest();
 
-    bool isComplete() const { return is_complete; } // change implementation to cpp
+    bool isComplete() const { return is_complete; } 
 
 
     const map<string, string> &getHeaders() const;

@@ -10,7 +10,7 @@ INCLUDES := -Isrc \
             -Isrc/classes/parsing/server \
             -Isrc/classes/openConnection \
             -Isrc/classes/http \
-            -Isrc/classes/helperFunc 
+            -Isrc/classes/helperFunc
 
 SRCS := $(wildcard src/Program/*.cpp) \
         $(wildcard src/classes/parsing/location/*.cpp) \

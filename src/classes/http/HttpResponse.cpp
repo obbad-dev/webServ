@@ -1,4 +1,4 @@
-// #include <iostream>
+
 #include "HttpResponse.hpp"
 #include "ServerSide.hpp"
 #include "helperFunc.hpp"
@@ -71,7 +71,7 @@ bool read_content(string &content, string &path)
 
 	if (!file.is_open())
 	{
-		// cout << "problem open\n";
+		
 		return false;
 	}
 
@@ -80,7 +80,7 @@ bool read_content(string &content, string &path)
 
     if (file.bad())
 	{
-		// cout << "problem bad\n";
+		
         return false;
 	}
 
@@ -91,7 +91,7 @@ bool read_content(string &content, string &path)
 
 void HttpResponse::buildErrorResponse(const HttpException &e, const Server &server)
 {
-	// std::cout << "DEBUG: buildErrorResponse called with status " << e.getStatusCode() << std::endl;
+	
 	string content;
 	bool founErroPage = false;
 
@@ -120,73 +120,73 @@ void HttpResponse::buildErrorResponse(const HttpException &e, const Server &serv
 	response_body = content;
 }
 
-// void HttpResponse::buildStaticResponse(const HttpRequest& request, const Server& server)
-// {
-	// const vector<LocationConf>& locations = server.getLocations();
-	// const LocationConf* matched_loc = NULL;
-	// matched_loc = getMatchingLocation(locations, request.getPath());
 
-	// string root = server.getRoot();
-	// if (matched_loc) {
-	// 	root = matched_loc->getRoot();
-	// }
 
-	// string fullPath;
-	// if (!realPath(root, request.getPath(), fullPath)) {
-	// 	throw HttpException(STATUS_NOT_FOUND);
-	// }
-	// // /resources/portfolio/index.html/index.html
-	// // cout << "fullPath: " << fullPath << endl;
-	// struct stat path_stat;
-	// if (stat(fullPath.c_str(), &path_stat) != 0) {
-	// 	throw HttpException(STATUS_NOT_FOUND);
-	// }
+	
+	
+	
 
-	// if (S_ISDIR(path_stat.st_mode))
-	// {
-	// 	bool found_index = false;
-	// 	vector<string> indices;
-	// 	if (matched_loc && matched_loc->indexIsSet())
-	// 		indices = matched_loc->getIndex();
-	// 	else
-	// 		indices = server.getIndex();
+	
+	
+	
+	
 
-	// 	for (size_t i = 0; i < indices.size(); ++i)
-	// 	{
-	// 		string index_path = fullPath;
-	// 		if (index_path[index_path.length() - 1] != '/')
-	// 			index_path += "/";
-	// 		index_path += indices[i];
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 
-	// 		if (stat(index_path.c_str(), &path_stat) == 0 && S_ISREG(path_stat.st_mode))
-	// 		{
-	// 			fullPath = index_path;
-	// 			found_index = true;
-	// 			break;
-	// 		}
-	// 	}
+	
+	
+	
+	
+	
+	
+	
+	
 
-	// 	if (!found_index)
-	// 	{
-	// 		if (matched_loc && matched_loc->hasAutoindex())
-	// 			throw HttpException(STATUS_FORBIDDEN);
-	// 		else
-	// 			throw HttpException(STATUS_FORBIDDEN);
-	// 	}
-	// }
+	
+	
+	
+	
+	
+	
 
-	// string content;
-	// if (!read_content(content, fullPath))
-	// {
-	// 	throw HttpException(STATUS_FORBIDDEN); // Could be permission issue
-	// }
+	
+	
+	
+	
+	
+	
+	
 
-	// status_code = 200;
-	// message = "OK";
-	// response_headers["Content-Type"] = getMimeType(fullPath, "text/plain");
-	// response_headers["Content-Length"] = intToString(content.size());
-	// response_body = content;
-// }
+	
+	
+	
+	
+	
+	
+	
+	
+
+	
+	
+	
+	
+	
+
+	
+	
+	
+	
+	
+
 
 string generateDirectoryListing(const string &dirPath, const string &uriPath)
 {
@@ -312,7 +312,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
     HttpResponse &response = manager.response;
     const Server &server = manager.blockServer;
 
-	// 2. Find matching location (Longest Prefix Match)
+	
 	string path = request.getPath();
 	const LocationConf *location = getMatchingLocation(server.getLocations(), path);
 	if (location && location->hasClientMaxBodySize())
@@ -324,7 +324,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	{
 		throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
 	}
-	// 3. Handle Redirection (301 / 302)
+	
 	if (location && location->hasReturn())
 	{
 		pair<int, string> redir = location->getReturn();
@@ -336,14 +336,14 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		return;
 	}
 
-	// 4. Method Verification (405 Method Not Allowed)
+	
 	if (location)
 	{
-		// cout << "method verification\n";
+		
 		const set<string> &allowed = location->getAllowMethods();
 		if (allowed.find(request.getMethod()) == allowed.end())
 		{
-			// throw HttpException(STATUS_METHOD_NOT_ALLOWED);
+			
 			response.buildErrorResponse(HttpException(STATUS_METHOD_NOT_ALLOWED), server);
 			string allowHeader;
 			for (set<string>::const_iterator it = allowed.begin(); it != allowed.end(); ++it)
@@ -358,25 +358,25 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		}
 	}
 
-	// 5. Construct Physical Path
+	
 	struct stat pathStat;
 	string physicalPath;
 	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
-	// cout << "root: " << root << "\n";
-	// cout << "path: " << path << "\n";
+	
+	
 
 	if (!realPath(root, path, physicalPath))
 	{
-		// cout << "realPath failed for root: " << root << ", path: " << path << endl;
-		// cout << "forbidden 1\n";
-		throw HttpException(STATUS_FORBIDDEN); // Escaping the root directory structure
+		
+		
+		throw HttpException(STATUS_FORBIDDEN); 
 	}
-	// cout << "physicalpath after: " << physicalPath << "\n";
+	
 
 	if (request.getMethod() == "GET")
 	{
-		// cout << "physical path before: " << physicalPath << "\n";
-		// 6. File vs Directory Resolution
+		
+		
 		if (stat(physicalPath.c_str(), &pathStat) != 0)
 		{
 			throw HttpException(STATUS_NOT_FOUND);
@@ -384,7 +384,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 
 		if (S_ISDIR(pathStat.st_mode))
 		{
-			// cout << "is dir\n";
+			
 			const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
 			bool indexFound = false;
 			for (size_t i = 0; i < indexes.size(); ++i)
@@ -394,11 +394,11 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 					testIndex += "/";
 				testIndex += indexes[i];
 
-				// cout << "Test index: " << testIndex << "\n";
+				
 				struct stat indexStat;
 				if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
 				{
-					// cout << "enter the if\n";
+					
 					physicalPath = testIndex;
 					indexFound = true;
 					break;
@@ -407,13 +407,13 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 
 			if (!indexFound)
 			{
-				// cout << "index not found\n";
+				
 				if (location && location->hasAutoindex())
 				{
 					string listing = generateDirectoryListing(physicalPath, path);
 					if (listing.empty())
 					{
-						// cout << "Server error 1\n";
+						
 						throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 					}
 					response.setStatusCode(200);
@@ -426,12 +426,12 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 				}
 				else
 				{
-					// cout << "forbidden 2\n";
+					
 					throw HttpException(STATUS_NOT_FOUND);
 				}
 			}
 		}
-		// cout << "physical path after: " << physicalPath << "\n";
+		
 
 		if (stat(physicalPath.c_str(), &pathStat) != 0)
 		{
@@ -440,14 +440,14 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 
 		if (!S_ISREG(pathStat.st_mode))
 		{
-			// cout << "forbidden 3\n";
+			
 			throw HttpException(STATUS_FORBIDDEN);
 		}
 
 		string body;
 		if (!read_content(body, physicalPath))
 		{
-			// cout << "Server error 2\n";
+			
 			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 		}
 		response.setStatusCode(200);
@@ -458,12 +458,12 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	}
 	else if (request.getMethod() == "POST")
 	{
-		// cout << "eneters post\n";
+		
 		if (location && location->uploadEnabledStatus())
 		{
 			string uploadDir = location->getUploadPath();
-			// if (uploadDir.empty())
-			// 	uploadDir = ".";
+			
+			
 
 			if (stat(uploadDir.c_str(), &pathStat) == 0 && !S_ISDIR(pathStat.st_mode))
 				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
@@ -501,7 +501,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 			ofstream outFile(finalUploadPath.c_str(), ios::binary);
 			if (!outFile.is_open())
 			{
-				// cout << "Server error 3\n";
+				
 				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 			}
 
@@ -525,7 +525,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 			string bodyContent = "POST request received";
 			response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
 			response.setResponseBody(bodyContent);
-			// throw HttpException(STATUS_METHOD_NOT_ALLOWED);
+			
 		}
 	}
 	else if (request.getMethod() == "DELETE")
@@ -540,7 +540,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		}
 		else
 		{
-			// cout << "forbidden 4\n";
+			
 			throw HttpException(STATUS_FORBIDDEN);
 		}
 	}
@@ -550,7 +550,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 
 void HttpResponse::serializeResponse(const string& httpVersion)
 {
-	// cout << "status_code: " << status_code << ", message: " << message << "\n";
+	
 	response_serialized.clear();
 	response_serialized.append(httpVersion + " " + intToString(status_code) + " " + message + "\r\n");
 	for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)
@@ -606,7 +606,7 @@ void HttpResponse::parseCgiOutput()
 				std::string key = line.substr(0, colon_pos);
 				std::string value = line.substr(colon_pos + 1);
 
-				// Trim leading and trailing whitespace for value
+				
 				size_t start = value.find_first_not_of(" \t");
 				if (start != std::string::npos) {
 					size_t end = value.find_last_not_of(" \t");
@@ -621,7 +621,7 @@ void HttpResponse::parseCgiOutput()
 					status_iss >> status_code;
 					std::getline(status_iss, message);
 					
-					// Trim leading and trailing whitespace for message
+					
 					size_t msg_start = message.find_first_not_of(" \t");
 					if (msg_start != std::string::npos) {
 						size_t msg_end = message.find_last_not_of(" \t");
@@ -649,7 +649,7 @@ void HttpResponse::parseCgiOutput()
 	response_headers["Content-Length"] = intToString(response_body.size());
 }
 
-//? Getters
+
 int HttpResponse::getStatusCode() const
 {
 	return status_code;
@@ -686,12 +686,12 @@ int HttpResponse::send_response(int fd)
 
 	if (n == -1)
 	{
-		// cout << "!!!!!! Error sending response to client: " << strerror(errno) << std::endl;
+		
 		return -1;
 	}
 
 	bytesSent += n;
-	// cout << "DEBUG: Sent " << bytesSent << "/" << response_serialized.size() << std::endl;
+	
 	if (bytesSent >= response_serialized.size())
 		return 1;
 

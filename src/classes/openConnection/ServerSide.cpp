@@ -1,5 +1,6 @@
 #include "ServerSide.hpp"
 #include "HttpException.hpp"
+#include "helperFunc.hpp"
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
@@ -33,7 +34,7 @@ void ServerSide::create_server_sock()
         {
             int sockfd = socket(AF_INET, SOCK_STREAM, 0);
             if (sockfd == -1)
-                throw runtime_error("Socket failed to open"); // close previous files when error occurs
+                throw runtime_error("Socket failed to open"); 
 
             int opt = 1;
             if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
@@ -42,17 +43,20 @@ void ServerSide::create_server_sock()
             if (fcntl(sockfd, F_SETFL, O_NONBLOCK) == -1)
                 throw runtime_error("Fcntl for server failed");
 
+            if (fcntl(sockfd, F_SETFD, FD_CLOEXEC) == -1)
+                throw runtime_error("Fcntl FD_CLOEXEC for server failed");
+
             struct sockaddr_in s_addr;
-            bzero(&s_addr, sizeof(s_addr)); // replace with our bzero
+            bzero(&s_addr, sizeof(s_addr)); 
             s_addr.sin_family = AF_INET;
             s_addr.sin_port = htons(tmp_listen[j].port);
-            s_addr.sin_addr.s_addr = inet_addr(tmp_listen[j].ip.c_str()); // inet_addr not allowed
+            s_addr.sin_addr.s_addr = inet_addr(tmp_listen[j].ip.c_str()); 
 
             if (bind(sockfd, reinterpret_cast<sockaddr*>(&s_addr), sizeof(s_addr)) == -1)
-                throw runtime_error("Bind failed"); // close previous files when error occurs
+                throw runtime_error("Bind failed"); 
 
             if (listen(sockfd, SOMAXCONN) == -1)
-                throw runtime_error("listen failed"); // close previous files when error occurs
+                throw runtime_error("listen failed"); 
 
             fds.insert(std::make_pair(sockfd, FdManager(SERVER, time(NULL), servers[i], opt, tmp_listen[j])));
         }
@@ -85,10 +89,11 @@ void ServerSide::change_epoll_event(int epoll_fd, int fd, uint32_t events)
         throw runtime_error("Epoll_ctl_mod failed");
 }
 
-void disconnect_client(int fd, FdManager &manager)
+void disconnect_client(int fd, FdManager &manager, map<int, int> &cgiToClient)
 {
+    cleanupCgi(manager, cgiToClient);
     ServerSide::remove_from_epoll(manager.epollFd, fd);
-    close (fd);
+    close(fd);
 }
 
 void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager& serverManager)
@@ -107,6 +112,9 @@ void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager& se
         if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
             throw runtime_error("Fcntl for client failed");
 
+        if (fcntl(clientfd, F_SETFD, FD_CLOEXEC) == -1)
+            throw runtime_error("Fcntl FD_CLOEXEC for client failed");
+
         add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
 
         fds.insert(std::make_pair(clientfd, FdManager(CLIENT, time(NULL), serverManager.blockServer, epoll_fd, serverManager.listen)));
@@ -121,15 +129,13 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
 	HttpResponse& response = it->second.response;
 
     try {
-        // Read and parse the incoming HTTP request
+        
         if (!request.parseRequest(client_fd))
         {
-            disconnect_client(client_fd, it->second);
+            disconnect_client(client_fd, it->second, cgiToClient);
             fds.erase(client_fd);
             return;
         }
-
-        // Check if the request is fully received and parsed
         if (request.isComplete())
         {
             cout << "Request is: " << request.getPath() << endl;
@@ -142,14 +148,13 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, map<int, FdManag
 				if (it->second.cgi_state == NOT_FINISHED)
 					return ;
                 response.prepareCGI(it->second, script_path, interpreter_path);
-                // Map both ends of the CGI pipe back to this client's file descriptor
+                
 				cgiToClient[it->second.from_cgi_fd] = client_fd;
 				if (it->second.stat_fd_to_cgi == NOT_FINISHED)
                 	cgiToClient[it->second.to_cgi_fd] = client_fd;
             }
             else if (!is_cgi)
             {
-				// cout << "Static request detected. Building static response.\n";
                 response.buildStaticResponse(it->second);
                 change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
             }
@@ -168,7 +173,6 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
 {
     try
     {
-        // Execute CGI read or write operations based on the event and triggered FD
         it->second.response.excuteCGI(it->second, cgi_fd, events);
 
 		if (it->second.stat_fd_to_cgi == FINISHED )
@@ -178,24 +182,18 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
 		if (it->second.stat_fd_from_cgi == FINISHED)
         {
 			cgiToClient.erase(it->second.from_cgi_fd);
-		}
-	
-        // If the CGI process has completely finished (both pipes closed and process reaped)
+		}    
         if (it->second.cgi_state == FINISHED)
         {
-            // 1. Parse the raw CGI output to extract headers and the real body
             it->second.response.parseCgiOutput();
-            // 2. Build the final HTTP response string
             it->second.response.serializeResponse(it->second.request.getProtocolVersion());
-            // 3. Now we tell epoll we are ready to send it to the client
             change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
         }
     }
     catch (const HttpException& e)
     {
+        cleanupCgi(it->second, cgiToClient);
         it->second.response.buildErrorResponse(e, it->second.blockServer);
-        cgiToClient.erase(it->second.to_cgi_fd);
-        cgiToClient.erase(it->second.from_cgi_fd);
 		it->second.response.serializeResponse(it->second.request.getProtocolVersion());
 		change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
     }
@@ -203,31 +201,22 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
 
 void ServerSide::handleClientOutput(int epoll_fd, int client_fd, map<int, FdManager>::iterator& it)
 {
-    // Attempt to send the serialized HTTP response over the socket
     int ret = it->second.response.send_response(client_fd);
-
     if (ret == -1)
-    {
-		// cout << "client discnnected\n";
-        disconnect_client(client_fd, it->second);
+    {		
+        disconnect_client(client_fd, it->second, cgiToClient);
         fds.erase(client_fd);
     }
     else if (ret == 1)
-    {
-        // The entire response was successfully sent
-        it->second.lastActivity = time(NULL);
-    
-        // Switch back to listening for new requests on this connection (Keep-Alive)
+    {   
+        it->second.lastActivity = time(NULL);        
         if (!it->second.request.isKeepAlive())
         {
-            // If the client requested Connection: close, disconnect immediately
-			// cout << "not keep alive\n";
-            disconnect_client(client_fd, it->second);
+            disconnect_client(client_fd, it->second, cgiToClient);
             fds.erase(client_fd);
         }
         else
-        {
-			// cout << "reseted the object\n";
+        {	
             it->second.reset();
             change_epoll_event(epoll_fd, client_fd, EPOLLIN);
         }
@@ -239,11 +228,11 @@ void ServerSide::handleClientTimeouts()
     time_t currentTime = time(NULL);
     for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); )
     {
-        // Check if the connection has been idle longer than the allowed TIMEOUT
+        
         if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
         {
-            // cout << "eighth remove epoll\n";
-            disconnect_client(it->first, it->second);
+            
+            disconnect_client(it->first, it->second, cgiToClient);
             map<int, FdManager>::iterator tmp = it++;
             fds.erase(tmp);
         }
@@ -256,7 +245,7 @@ void ServerSide::handleClientTimeouts()
 
 void ServerSide::communication_part()
 {
-    int epoll_fd = epoll_create(1);
+    int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
 
     if (epoll_fd == -1)
         throw runtime_error("Epoll creation failed");
@@ -295,27 +284,32 @@ void ServerSide::communication_part()
             }
             else if (cgi_it != cgiToClient.end())
             {
-				// std::cout << "CGI EVENT DETECTED\n";
+				
                 handleCgiEvent(epoll_fd, client_fd, current_fd, event_arr[i].events, manager_it);
             }
             else if (event_arr[i].events & EPOLLIN)
             {
-				// std::cout << "CLIENT INPUT EVENT DETECTED\n";
+				
                 handleClientInput(epoll_fd, client_fd, manager_it);
             }
             else if (event_arr[i].events & EPOLLOUT)
             {
-				// std::cout << "CLIENT OUTPUT EVENT DETECTED\n";
+				
                 handleClientOutput(epoll_fd, client_fd, manager_it);
             }
         }
-
         handleClientTimeouts();
     }
 
-    close (epoll_fd);
-    for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
-        close (it->first);
+	// Cleanup
+	for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
+	{
+		if (it->second.type == CLIENT)
+			cleanupCgi(it->second, cgiToClient);
+		remove_from_epoll(epoll_fd, it->first);
+		close(it->first);
+	}
+	close(epoll_fd);
 }
 
 map<string, string> FdManager::extensions;
