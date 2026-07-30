@@ -27,10 +27,9 @@ public:
 	HttpResponse();
 	~HttpResponse();
 
-	static string getDefaultStatusMessage(int status_code);
 	static string getDefaultErrorPage(int status_code, string message);
 	void buildErrorResponse(const HttpException &e, const Server &server);
-	
+
 	void buildStaticResponse(FdManager &manager);
 	void serializeResponse(const string& httpVersion);
 
@@ -38,9 +37,9 @@ public:
 	void setMessage(const string &message);
 	void setResponseHeader(const string &key, const string &value);
 	void setResponseBody(const string &body);
-	void setResponseBody(const char* buffer, size_t size){
-		response_body.append(buffer, size);
-	}
+	void setResponseBody(const char* buffer, size_t size);
+
+	static string getDefaultStatusMessage(int status_code);
 	int getStatusCode() const;
 	const string &getMessage() const;
 	const map<string, string> &getResponseHeaders() const;

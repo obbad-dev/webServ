@@ -1,6 +1,7 @@
 #include "ServerSide.hpp"
 #include "HttpException.hpp"
 #include "helperFunc.hpp"
+
 ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
 {
 }
@@ -122,7 +123,6 @@ void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager &se
 
 void ServerSide::handleClientInput(int epoll_fd, int client_fd, FdManager &manager)
 {
-
     manager.lastActivity = time(NULL);
     HttpRequest &request = manager.request;
     HttpResponse &response = manager.response;
@@ -244,18 +244,20 @@ void ServerSide::handleClientTimeouts()
     }
 }
 
-void ServerSide::communication_part()
+void ServerSide::resources_cleanup(int epoll_fd)
 {
-    int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
-
-    if (epoll_fd == -1)
-        throw runtime_error("Epoll creation failed");
-
     for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
     {
-        add_fd_to_epoll(epoll_fd, it->first, EPOLLIN);
+        if (it->second.type == CLIENT)
+            cleanupCgi(it->second, cgiToClient);
+        remove_from_epoll(epoll_fd, it->first);
+        close(it->first);
     }
+    close(epoll_fd);
+}
 
+void ServerSide::server_life_cycle(int epoll_fd)
+{
     struct epoll_event event_arr[1024];
 
     while (!sig)
@@ -298,16 +300,23 @@ void ServerSide::communication_part()
         }
         handleClientTimeouts();
     }
+}
 
-    // Cleanup
+void ServerSide::communication_part()
+{
+    int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+
+    if (epoll_fd == -1)
+        throw runtime_error("Epoll creation failed");
+
     for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
     {
-        if (it->second.type == CLIENT)
-            cleanupCgi(it->second, cgiToClient);
-        remove_from_epoll(epoll_fd, it->first);
-        close(it->first);
+        add_fd_to_epoll(epoll_fd, it->first, EPOLLIN);
     }
-    close(epoll_fd);
+
+    server_life_cycle(epoll_fd);
+
+    resources_cleanup(epoll_fd);
 }
 
 map<string, string> FdManager::extensions;
