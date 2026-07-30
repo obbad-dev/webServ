@@ -137,6 +137,14 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, FdManager &manag
         }
         if (request.isComplete())
         {
+            if (request.getMethod() != "GET" && request.getMethod() != "POST" && request.getMethod() != "DELETE")
+            {
+                throw HttpException(STATUS_METHOD_NOT_ALLOWED);
+            }
+            if (request.getBodyContent().size() > manager.client_max_body_size)
+            {
+                throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
+            }
             string script_path;
             string interpreter_path;
             bool is_cgi = request.isCgi(script_path, interpreter_path, manager);

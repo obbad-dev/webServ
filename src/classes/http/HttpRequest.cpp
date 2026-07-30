@@ -99,7 +99,7 @@ void HttpRequest::setBodyType()
         long number = strtol(headers["content-length"].c_str(), &endPtr, 10);
         if (*endPtr != '\0' || errno == ERANGE || number < 0)
             throw HttpException(ERR_INVALID_CONTENT_LEN);
-        contentLength = number;
+        contentLength = static_cast<size_t>(number);
     }
     else
     {
@@ -131,7 +131,6 @@ bool HttpRequest::readRequest(int &clientFd)
         return false;
     if (byteRead < 0)
     {
-        cout << "!!!!!! Error in read: " << strerror(errno) << "\n";
         throw HttpException(ERR_READ);
     }
     else
@@ -238,10 +237,6 @@ void HttpRequest::parseChunkedBody(string &buffer)
             }
             buffer.erase(0, expectedChunkSize + 2);
             bodyContent.append(content);
-            if (bodyContent.size() > client_max_body_size)
-            {
-                throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
-            }
             chunk_state = READ_SIZE;
         }
     }
@@ -254,15 +249,7 @@ void HttpRequest::determineClientMaxBodySize(FdManager &fdManager)
 
     if (fdManager.location && fdManager.location->hasClientMaxBodySize())
     {
-        this->client_max_body_size = static_cast<size_t>(fdManager.location->getClientMaxBodySize());
-    }
-    else if (fdManager.blockServer.hasSetClientMaxBodySize())
-    {
-        this->client_max_body_size = static_cast<size_t>(fdManager.blockServer.getClientMaxBodySize());
-    }
-    if (body_type == CONTENT_LENGTH && contentLength > client_max_body_size)
-    {
-        throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
+        fdManager.client_max_body_size = static_cast<size_t>(fdManager.location->getClientMaxBodySize());
     }
 }
 

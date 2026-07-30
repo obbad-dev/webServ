@@ -58,6 +58,7 @@ struct FdManager
   STATCGI stat_fd_from_cgi;
   STATCGI cgi_state;
   size_t cgi_bytes_written;
+  size_t client_max_body_size;
 
   FdManager(CONN_TYPE _type, time_t _lastActivity, const Server &_blockServer,
             int &_epollFd, const Listen &_listen)
@@ -72,6 +73,7 @@ struct FdManager
     to_cgi_fd = -1;
     from_cgi_fd = -1;
     location = NULL;
+    client_max_body_size = static_cast<size_t>(blockServer.getClientMaxBodySize());
   }
 
   void reset()
@@ -85,6 +87,8 @@ struct FdManager
     stat_fd_from_cgi = FINISHED;
     cgi_bytes_written = 0;
     target_path.clear();
+    location = NULL;
+    client_max_body_size = static_cast<size_t>(blockServer.getClientMaxBodySize());
   }
 };
 

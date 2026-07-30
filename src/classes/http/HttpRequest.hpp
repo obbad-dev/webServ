@@ -32,7 +32,6 @@ private:
     string bodyContent;
     size_t contentLength;
     size_t expectedChunkSize;
-    size_t client_max_body_size;
 
     bool is_complete;
 
