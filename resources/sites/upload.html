@@ -819,14 +819,14 @@ upload_path ./resources/sites/cgi/uploads;</pre>
                         <div style="display: flex; align-items: center; gap: 0.75rem; overflow: hidden;">
                             <span style="font-size: 1.2rem;">${icon}</span>
                             <div style="display: flex; flex-direction: column; overflow: hidden;">
-                                <a href="cgi/uploads/${encodeURIComponent(file.name)}" target="_blank" class="uploaded-file-name" title="${escapeHtml(file.name)}">
+                                <a href="/cgi/uploads/${encodeURIComponent(file.name)}" target="_blank" class="uploaded-file-name" title="${escapeHtml(file.name)}">
                                     ${escapeHtml(file.name)}
                                 </a>
                                 <span style="font-size: 0.78rem; color: var(--text-secondary);">${sizeStr}</span>
                             </div>
                         </div>
                         <div class="file-actions">
-                            <a href="cgi/uploads/${encodeURIComponent(file.name)}" target="_blank" class="btn btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.8rem; text-decoration: none;">
+                            <a href="/cgi/uploads/${encodeURIComponent(file.name)}" target="_blank" class="btn btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.8rem; text-decoration: none;">
                                 👁️ GET
                             </a>
                             <button class="btn btn-danger" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;" onclick="deleteFile('${escapeJs(file.name)}')">

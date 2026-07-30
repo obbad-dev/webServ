@@ -15,10 +15,10 @@ void makeEnvVars(FdManager &fdManager)
 
 	const map<string, string> &headers = fdManager.request.getHeaders();
 	const string content_length = (fdManager.request.getBodyContent().empty()) ? "" : intToString(fdManager.request.getBodyContent().size());
-	
-	env_vars.push_back("PATH_INFO=" + fdManager.request.getPath());
-	
-	env_vars.push_back("PATH_TRANSLATED=" + fdManager.request.getPath());
+
+	env_vars.push_back("PATH_INFO=" + fdManager.request.getTarget());
+
+	env_vars.push_back("PATH_TRANSLATED=" + fdManager.request.getTarget());
 	env_vars.push_back("REQUEST_METHOD=" + fdManager.request.getMethod());
 	env_vars.push_back("QUERY_STRING=" + fdManager.request.getQuery());
 	if (!content_length.empty())
@@ -32,21 +32,19 @@ void makeEnvVars(FdManager &fdManager)
 	env_vars.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env_vars.push_back("SERVER_SOFTWARE=webServ/1.0");
 
-	
 	for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
 	{
 		string key = "HTTP_" + it->first;
 		for (size_t i = 0; i < key.length(); ++i)
 		{
 			if (key[i] >= 'a' && key[i] <= 'z')
-				key[i] = key[i] - 32; 
+				key[i] = key[i] - 32;
 			else if (key[i] == '-')
 				key[i] = '_';
 		}
 		env_vars.push_back(key + "=" + it->second);
 	}
 }
-
 
 static bool interpreterIsExecutable(const std::string &interpreterPath)
 {
@@ -133,11 +131,13 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const string &scriptName, co
 		fdManager.stat_fd_to_cgi = NOT_FINISHED;
 		fdManager.stat_fd_from_cgi = NOT_FINISHED;
 		ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.from_cgi_fd, EPOLLIN);
-		if (fdManager.request.getBodyContent().empty()){
+		if (fdManager.request.getBodyContent().empty())
+		{
 			close(fdManager.to_cgi_fd);
 			fdManager.stat_fd_to_cgi = FINISHED;
 		}
-		else{
+		else
+		{
 			ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.to_cgi_fd, EPOLLOUT);
 		}
 	}
@@ -153,12 +153,12 @@ static void finishCgiWrite(FdManager &fdManager)
 
 static void handleCGIWrite(FdManager &fdManager)
 {
-	const std::string& body = fdManager.request.getBodyContent();
-	
-	ssize_t bytes_written = write(fdManager.to_cgi_fd, 
-								  body.data() + fdManager.cgi_bytes_written, 
+	const std::string &body = fdManager.request.getBodyContent();
+
+	ssize_t bytes_written = write(fdManager.to_cgi_fd,
+								  body.data() + fdManager.cgi_bytes_written,
 								  body.size() - fdManager.cgi_bytes_written);
-	
+
 	if (bytes_written == -1)
 	{
 		finishCgiWrite(fdManager);
@@ -178,8 +178,8 @@ static void finishCgiRead(FdManager &fdManager)
 }
 
 static void handleCGIRead(FdManager &fdManager)
-{ 
-	char buffer[65536]; 
+{
+	char buffer[65536];
 	memset(buffer, 0, sizeof(buffer));
 	ssize_t bytes_read = read(fdManager.from_cgi_fd, buffer, sizeof(buffer));
 
@@ -194,7 +194,8 @@ static void handleCGIRead(FdManager &fdManager)
 		finishCgiRead(fdManager);
 		int status;
 		waitpid(fdManager.cgi_pid, &status, 0);
-		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+		{
 			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 		}
 		return;
@@ -205,19 +206,19 @@ static void handleCGIRead(FdManager &fdManager)
 
 void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events)
 {
-	
-	if (triggered_fd == fdManager.to_cgi_fd && (events & (EPOLLERR | EPOLLHUP))) 
+
+	if (triggered_fd == fdManager.to_cgi_fd && (events & (EPOLLERR | EPOLLHUP)))
 	{
 		finishCgiWrite(fdManager);
 		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 	}
-	
+
 	if (triggered_fd == fdManager.from_cgi_fd && (events & EPOLLERR))
 	{
 		finishCgiRead(fdManager);
 		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 	}
-	
+
 	if (triggered_fd == fdManager.to_cgi_fd && (events & EPOLLOUT))
 	{
 		handleCGIWrite(fdManager);
