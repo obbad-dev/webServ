@@ -1,6 +1,5 @@
 #include "ServerSide.hpp"
 #include <iostream>
-using namespace std;
 
 int sig = 0;
 
@@ -16,21 +15,21 @@ int main (int ac, char *av[])
     {
         if (ac > 2)
         {
-            cerr << "the program can be executed only with ./webserv or ./webserv configFile\n";
+            std::cerr << "the program can be executed only with ./webserv or ./webserv configFile\n";
             return 1;
         }
         signal(SIGINT, sighandler);
         signal(SIGPIPE, SIG_IGN);
-        string fileName = "resources/configFiles/default.conf";
+        std::string fileName = "resources/configFiles/default.conf";
         if (ac == 2)
             fileName = av[1];
         ParseConfig parseConfig = ParseConfig(fileName);
         ServerSide srv = ServerSide(parseConfig.getServers());
         srv.setup();
     }
-    catch(const exception& e)
+    catch(const std::exception& e)
     {
-        cerr << e.what() << endl;
+        std::cerr << e.what() << std::endl;
         return 1;
     }
 }

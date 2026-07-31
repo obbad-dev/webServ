@@ -5,27 +5,26 @@
 #include <vector>
 #include <map>
 #include <stdint.h>
-using namespace std;
 
 
 
 class LocationConf
 {
 private:
-    string path;
-    set<string> allowMethods;
+    std::string path;
+    std::set<std::string> allowMethods;
     bool setAllowMethodsFlag;
-    string root;
+    std::string root;
     bool setRootFlag;
     bool autoindex;
-    vector<string> index;
+    std::vector<std::string> index;
     bool hasIndexFlag;
-    pair<int, string> returnPair;
+    std::pair<int, std::string> returnPair;
     bool hasReturnFlag;
     bool uploadEnabled;
-    string uploadPath;
+    std::string uploadPath;
     bool hasUploadFlag;
-    pair<string, string> cgiPass;
+    std::pair<std::string, std::string> cgiPass;
 	bool hasCgiPassFlag;
 	bool hasClientMaxBodySizeFlag;
 	uint64_t clientMaxBodySize;
@@ -34,30 +33,30 @@ public:
     LocationConf();
     ~LocationConf();
 
-    void setPath(const string &token);
-    void setAllowMethods(const vector<string> &methods);
-    void setRoot(const string &rootPath);
-    void setAutoindex(const string &token);
-    void setIndex(const vector<string> &indexFiles);
-    void setReturn(const string &path, const string &status);
-    void setUpload(const string &path);
-    void setEnableUpload(const string &token);
-    void setCgiPass(const string &extension, const string &ineterpreter);
-	void setClientMaxBodySize(const string &token);
+    void setPath(const std::string &token);
+    void setAllowMethods(const std::vector<std::string> &methods);
+    void setRoot(const std::string &rootPath);
+    void setAutoindex(const std::string &token);
+    void setIndex(const std::vector<std::string> &indexFiles);
+    void setReturn(const std::string &path, const std::string &status);
+    void setUpload(const std::string &path);
+    void setEnableUpload(const std::string &token);
+    void setCgiPass(const std::string &extension, const std::string &ineterpreter);
+	void setClientMaxBodySize(const std::string &token);
 
-    const string &getRoot() const;
+    const std::string &getRoot() const;
     const bool &rootIsSet() const;
-    const string &getPath() const;
-    const set<string> &getAllowMethods() const;
+    const std::string &getPath() const;
+    const std::set<std::string> &getAllowMethods() const;
     const bool &hasAutoindex() const;
-    const vector<string> &getIndex() const;
+    const std::vector<std::string> &getIndex() const;
     const bool &indexIsSet() const;
-    const pair<int, string> &getReturn() const;
+    const std::pair<int, std::string> &getReturn() const;
     const bool &hasReturn() const;
     const bool &uploadEnabledStatus() const;
-    const string &getUploadPath() const;
+    const std::string &getUploadPath() const;
     const bool &uploadIsSet() const;
-    const pair<string, string> &getCgiPass() const;
+    const std::pair<std::string, std::string> &getCgiPass() const;
     const bool &hasCgiPass() const;
 	const bool &hasClientMaxBodySize() const;
 	const uint64_t &getClientMaxBodySize() const;

@@ -6,8 +6,6 @@
 #include "HttpException.hpp"
 #include "HttpRequest.hpp"
 
-using namespace std;
-
 struct FdManager;
 
 #define READ 0
@@ -17,35 +15,35 @@ class HttpResponse
 {
 private:
 	int status_code;
-	string message;
-	map<string, string> response_headers;
-	string response_body;
-	string response_serialized;
+	std::string message;
+	std::map<std::string, std::string> response_headers;
+	std::string response_body;
+	std::string response_serialized;
 	size_t bytesSent;
 
 public:
 	HttpResponse();
 	~HttpResponse();
 
-	static string getDefaultErrorPage(int status_code, string message);
+	static std::string getDefaultErrorPage(int status_code, std::string message);
 	void buildErrorResponse(const HttpException &e, const Server &server);
 
 	void buildStaticResponse(FdManager &manager);
-	void serializeResponse(const string &httpVersion);
+	void serializeResponse(const std::string &httpVersion);
 
 	void setStatusCode(int status_code);
-	void setMessage(const string &message);
-	void setResponseHeader(const string &key, const string &value);
-	void setResponseBody(const string &body);
+	void setMessage(const std::string &message);
+	void setResponseHeader(const std::string &key, const std::string &value);
+	void setResponseBody(const std::string &body);
 	void setResponseBody(const char *buffer, size_t size);
 
-	static string getMessageStatusOfReturn(int status_code);
+	static std::string getMessageStatusOfReturn(int status_code);
 	int getStatusCode() const;
-	const string &getMessage() const;
-	const map<string, string> &getResponseHeaders() const;
-	const string &getResponseBody() const;
+	const std::string &getMessage() const;
+	const std::map<std::string, std::string> &getResponseHeaders() const;
+	const std::string &getResponseBody() const;
 
-	static void prepareCGI(FdManager &fdManager, const string &scriptPath, const string &interpreterPath);
+	static void prepareCGI(FdManager &fdManager, const std::string &scriptPath, const std::string &interpreterPath);
 	static void excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events);
 	void parseCgiOutput();
 	int send_response(int fd);

@@ -25,10 +25,10 @@ struct FdManager
     const Server &blockServer;
     std::vector<std::string> env_vars;
     LocationConf *location;
-    string target_path;
+    std::string target_path;
 
     int epollFd;
-    static map<string, string> extensions;
+    static std::map<std::string, std::string> extensions;
 
     int to_cgi_fd;
     int from_cgi_fd;

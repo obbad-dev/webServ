@@ -1,4 +1,3 @@
-
 #include "HttpResponse.hpp"
 #include "ServerSide.hpp"
 #include "helperFunc.hpp"
@@ -57,24 +56,18 @@ std::string HttpResponse::getDefaultErrorPage(int statusCode, std::string messag
 	return html;
 }
 
-bool read_content(string &content, string &path)
+bool read_content(std::string &content, std::string &path)
 {
-	ifstream file(path.c_str(), std::ios::binary);
+	std::ifstream file(path.c_str(), std::ios::binary);
 
 	if (!file.is_open())
-	{
-
 		return false;
-	}
 
 	std::ostringstream tmp;
 	tmp << file.rdbuf();
 
 	if (file.bad())
-	{
-
 		return false;
-	}
 
 	content = tmp.str();
 
@@ -83,19 +76,18 @@ bool read_content(string &content, string &path)
 
 void HttpResponse::buildErrorResponse(const HttpException &e, const Server &server)
 {
-
-	string content;
+	std::string content;
 	bool founErroPage = false;
 
 	status_code = e.getStatusCode();
 	message = e.getStatusMessage();
 
-	const map<int, string> &ErrPages = server.getErrorsPages();
-	map<int, string>::const_iterator it = ErrPages.find(e.getStatusCode());
+	const std::map<int, std::string> &ErrPages = server.getErrorsPages();
+	std::map<int, std::string>::const_iterator it = ErrPages.find(e.getStatusCode());
 
 	if (it != ErrPages.end())
 	{
-		string fullPath;
+		std::string fullPath;
 		if (realPath(server.getRoot(), it->second, fullPath) && read_content(content, fullPath))
 		{
 			founErroPage = true;
@@ -121,18 +113,22 @@ int HttpResponse::getStatusCode() const
 {
 	return status_code;
 }
-const string &HttpResponse::getMessage() const
+
+const std::string &HttpResponse::getMessage() const
 {
 	return message;
 }
-const map<string, string> &HttpResponse::getResponseHeaders() const
+
+const std::map<std::string, std::string> &HttpResponse::getResponseHeaders() const
 {
 	return response_headers;
 }
-const string &HttpResponse::getResponseBody() const
+
+const std::string &HttpResponse::getResponseBody() const
 {
 	return response_body;
 }
+
 void HttpResponse::setStatusCode(int status_code)
 {
 	this->status_code = status_code;
@@ -148,13 +144,13 @@ void HttpResponse::resetObjectResponse()
 	bytesSent = 0;
 }
 
-string generateDirectoryListing(const string &dirPath, const string &uriPath)
+std::string generateDirectoryListing(const std::string &dirPath, const std::string &uriPath)
 {
 	DIR *dir = opendir(dirPath.c_str());
 	if (!dir)
 		return "";
 
-	stringstream ss;
+	std::stringstream ss;
 	ss << "<html><head><title>Index of " << uriPath << "</title></head><body>\n";
 	ss << "<h1>Index of " << uriPath << "</h1><hr><ul>\n";
 
@@ -166,11 +162,11 @@ string generateDirectoryListing(const string &dirPath, const string &uriPath)
 	struct dirent *entry;
 	while ((entry = readdir(dir)) != NULL)
 	{
-		string name = entry->d_name;
+		std::string name = entry->d_name;
 		if (name == "." || name == "..")
 			continue;
 
-		string fullPath = dirPath;
+		std::string fullPath = dirPath;
 		if (fullPath.empty() || fullPath[fullPath.size() - 1] != '/')
 			fullPath += "/";
 		fullPath += name;
@@ -185,7 +181,7 @@ string generateDirectoryListing(const string &dirPath, const string &uriPath)
 			}
 		}
 
-		string linkName = name;
+		std::string linkName = name;
 		if (isDir)
 			linkName += "/";
 
@@ -196,7 +192,7 @@ string generateDirectoryListing(const string &dirPath, const string &uriPath)
 	return ss.str();
 }
 
-bool getBoundary(string &content_type, string &boundary)
+bool getBoundary(std::string &content_type, std::string &boundary)
 {
 	size_t pos = content_type.find("boundary=");
 
@@ -215,9 +211,9 @@ bool getBoundary(string &content_type, string &boundary)
 	return (!boundary.empty());
 }
 
-bool getDataFromRequest(string &filename, string &filebody, const string &request_body, string &boundary)
+bool getDataFromRequest(std::string &filename, std::string &filebody, const std::string &request_body, std::string &boundary)
 {
-	string delimiter = "--" + boundary;
+	std::string delimiter = "--" + boundary;
 	size_t content_start = request_body.find(delimiter);
 	if (content_start == std::string::npos)
 		return false;
@@ -232,7 +228,7 @@ bool getDataFromRequest(string &filename, string &filebody, const string &reques
 	if (headers_end == std::string::npos)
 		return false;
 
-	string part_headers = request_body.substr(content_start, headers_end - content_start);
+	std::string part_headers = request_body.substr(content_start, headers_end - content_start);
 
 	size_t fn_pos = part_headers.find("filename=\"");
 	if (fn_pos == std::string::npos)
@@ -265,7 +261,7 @@ bool getDataFromRequest(string &filename, string &filebody, const string &reques
 
 void handleReturn(HttpResponse &response, HttpRequest &request, const LocationConf *location)
 {
-	pair<int, string> redir = location->getReturn();
+	std::pair<int, std::string> redir = location->getReturn();
 	response.setStatusCode(redir.first);
 	response.setMessage(HttpResponse::getMessageStatusOfReturn(redir.first));
 	response.setResponseHeader("Location", redir.second);
@@ -275,12 +271,12 @@ void handleReturn(HttpResponse &response, HttpRequest &request, const LocationCo
 
 bool checkAllowedMethod(HttpResponse &response, HttpRequest &request, const LocationConf *location, const Server &server)
 {
-	const set<string> &allowed = location->getAllowMethods();
+	const std::set<std::string> &allowed = location->getAllowMethods();
 	if (allowed.find(request.getMethod()) == allowed.end())
 	{
 		response.buildErrorResponse(HttpException(STATUS_METHOD_NOT_ALLOWED), server);
-		string allowHeader;
-		for (set<string>::const_iterator it = allowed.begin(); it != allowed.end(); ++it)
+		std::string allowHeader;
+		for (std::set<std::string>::const_iterator it = allowed.begin(); it != allowed.end(); ++it)
 		{
 			if (it != allowed.begin())
 				allowHeader += ", ";
@@ -293,7 +289,7 @@ bool checkAllowedMethod(HttpResponse &response, HttpRequest &request, const Loca
 	return true;
 }
 
-void getMethod(const LocationConf *location, string &physicalPath, string &path,
+void getMethod(const LocationConf *location, std::string &physicalPath, std::string &path,
 			   HttpResponse &response, HttpRequest &request, const Server &server)
 {
 	struct stat pathStat;
@@ -304,11 +300,11 @@ void getMethod(const LocationConf *location, string &physicalPath, string &path,
 	}
 	if (S_ISDIR(pathStat.st_mode))
 	{
-		const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
+		const std::vector<std::string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
 		bool indexFound = false;
 		for (size_t i = 0; i < indexes.size(); ++i)
 		{
-			string testIndex = physicalPath;
+			std::string testIndex = physicalPath;
 			if (testIndex[testIndex.size() - 1] != '/')
 				testIndex += "/";
 			testIndex += indexes[i];
@@ -325,7 +321,7 @@ void getMethod(const LocationConf *location, string &physicalPath, string &path,
 		{
 			if (location && location->hasAutoindex())
 			{
-				string listing = generateDirectoryListing(physicalPath, path);
+				std::string listing = generateDirectoryListing(physicalPath, path);
 				if (listing.empty())
 					throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 				response.setStatusCode(200);
@@ -349,7 +345,7 @@ void getMethod(const LocationConf *location, string &physicalPath, string &path,
 	if (!S_ISREG(pathStat.st_mode))
 		throw HttpException(STATUS_FORBIDDEN);
 
-	string body;
+	std::string body;
 	if (!read_content(body, physicalPath))
 		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 
@@ -366,27 +362,27 @@ void postMethod(const LocationConf *location, HttpResponse &response, HttpReques
 
 	if (location && location->uploadEnabledStatus())
 	{
-		string uploadDir = location->getUploadPath();
+		std::string uploadDir = location->getUploadPath();
 
 		if (stat(uploadDir.c_str(), &pathStat) == 0 && !S_ISDIR(pathStat.st_mode))
 			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 
-		const map<string, string> &headers = request.getHeaders();
-		map<string, string>::const_iterator it = headers.find("content-type");
+		const std::map<std::string, std::string> &headers = request.getHeaders();
+		std::map<std::string, std::string>::const_iterator it = headers.find("content-type");
 
 		if (it == headers.end())
 			throw HttpException(STATUS_BAD_REQUEST);
 
-		string content_type = it->second;
-		string finalUploadPath, filebody;
+		std::string content_type = it->second;
+		std::string finalUploadPath, filebody;
 
 		if (content_type.find("multipart/form-data") != std::string::npos)
 		{
-			string boundary;
+			std::string boundary;
 			if (getBoundary(content_type, boundary) == false)
 				throw HttpException(STATUS_BAD_REQUEST);
 
-			string filename;
+			std::string filename;
 			if (getDataFromRequest(filename, filebody, request.getBodyContent(), boundary) == false)
 				throw HttpException(STATUS_BAD_REQUEST);
 
@@ -401,7 +397,7 @@ void postMethod(const LocationConf *location, HttpResponse &response, HttpReques
 			filebody = request.getBodyContent();
 		}
 
-		ofstream outFile(finalUploadPath.c_str(), ios::binary);
+		std::ofstream outFile(finalUploadPath.c_str(), std::ios::binary);
 		if (!outFile.is_open())
 		{
 
@@ -416,7 +412,7 @@ void postMethod(const LocationConf *location, HttpResponse &response, HttpReques
 		response.setStatusCode(201);
 		response.setMessage("Created");
 		response.setResponseHeader("Content-Type", "text/plain");
-		string bodyContent = "File uploaded successfully: " + finalUploadPath;
+		std::string bodyContent = "File uploaded successfully: " + finalUploadPath;
 		response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
 		response.setResponseBody(bodyContent);
 	}
@@ -425,13 +421,13 @@ void postMethod(const LocationConf *location, HttpResponse &response, HttpReques
 		response.setStatusCode(200);
 		response.setMessage("OK");
 		response.setResponseHeader("Content-Type", "text/plain");
-		string bodyContent = "POST request received";
+		std::string bodyContent = "POST request received";
 		response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
 		response.setResponseBody(bodyContent);
 	}
 }
 
-void deleteMethod(string &physicalPath, HttpResponse &response)
+void deleteMethod(std::string &physicalPath, HttpResponse &response)
 {
 	if (access(physicalPath.c_str(), F_OK) != 0)
 		throw HttpException(STATUS_NOT_FOUND);
@@ -451,7 +447,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	HttpResponse &response = manager.response;
 	const Server &server = manager.blockServer;
 
-	string &path = manager.target_path;
+	std::string &path = manager.target_path;
 	const LocationConf *location = manager.location;
 
 	if (location && location->hasReturn())
@@ -460,8 +456,8 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		return;
 	}
 
-	string physicalPath;
-	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
+	std::string physicalPath;
+	std::string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
 
 	if (!realPath(root, path, physicalPath))
 	{
@@ -480,11 +476,11 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	else if (request.getMethod() == "DELETE")
 		deleteMethod(physicalPath, response);
 
-	const string &version = request.getProtocolVersion();
+	const std::string &version = request.getProtocolVersion();
 	response.serializeResponse(version);
 }
 
-void HttpResponse::serializeResponse(const string &httpVersion)
+void HttpResponse::serializeResponse(const std::string &httpVersion)
 {
 
 	response_serialized.clear();

@@ -21,11 +21,11 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
     LocationConf locationConf;
     locationConf.setPath(consumeToken(i));
     if (consumeToken(i) != "{")
-        throw invalid_argument("directive \"location\" has no opening \"{\"");
+        throw std::invalid_argument("directive \"location\" has no opening \"{\"");
     while (i < _tokens.size())
     {
         bool needsSemicolon = true;
-        const string &currToken = consumeToken(i);
+        const std::string &currToken = consumeToken(i);
         if (currToken == "allow_methods")
         {
             locationConf.setAllowMethods(tokenizeMethods(i));
@@ -42,8 +42,8 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
         }
         else if (currToken == "return")
         {
-            string status = consumeToken(i);
-            string path = consumeToken(i);
+            std::string status = consumeToken(i);
+            std::string path = consumeToken(i);
             locationConf.setReturn(path, status);
         }
         else if (currToken == "upload_path")
@@ -54,32 +54,32 @@ void ParseConfig::parseLocations(Server &server, size_t &i)
             locationConf.setClientMaxBodySize(consumeToken(i));
         else if (currToken == "cgi_pass")
         {
-            const string& extension = consumeToken(i);
-           const string& interpreter = consumeToken(i);
+            const std::string& extension = consumeToken(i);
+           const std::string& interpreter = consumeToken(i);
             locationConf.setCgiPass(extension, interpreter);
         }
         else if (currToken == "}")
             break;
         else
-            throw invalid_argument("unexpected token '" + currToken + "'");
+            throw std::invalid_argument("unexpected token '" + currToken + "'");
         if (needsSemicolon && consumeToken(i) != ";")
-            throw invalid_argument("Syntax error: too many values in directive " + currToken);
+            throw std::invalid_argument("Syntax error: too many values in directive " + currToken);
     }
     if (locationConf.uploadEnabledStatus() && !locationConf.uploadIsSet())
-        throw invalid_argument("directive \"upload_path\": 'enable_upload' is set to 'on' but no upload path is specified.");
-    if (find(server.getLocations().begin(), server.getLocations().end(), locationConf) != server.getLocations().end())
-        throw invalid_argument("duplicate location block for path: " + locationConf.getPath());
+        throw std::invalid_argument("directive \"upload_path\": 'enable_upload' is set to 'on' but no upload path is specified.");
+    if (std::find(server.getLocations().begin(), server.getLocations().end(), locationConf) != server.getLocations().end())
+        throw std::invalid_argument("duplicate location block for path: " + locationConf.getPath());
     server.pushLocation(locationConf);
 }
 
 void ParseConfig::parseServer(Server &server, size_t &i)
 {
     if (consumeToken(i) != "{")
-        throw invalid_argument("Config file syntax error: expected '{' after 'server'.");
+        throw std::invalid_argument("Config file syntax error: expected '{' after 'server'.");
 
     while (i < _tokens.size())
     {
-        const string &currentToken = consumeToken(i);
+        const std::string &currentToken = consumeToken(i);
 
         bool needsSemicolon = true;
 
@@ -97,7 +97,7 @@ void ParseConfig::parseServer(Server &server, size_t &i)
         else if (currentToken == "client_max_body_size")
             server.setClientMaxBodySize(consumeToken(i));
         else if (currentToken == "error_page"){
-            vector<string> errorTokens;
+            std::vector<std::string> errorTokens;
             tokenizeErrorPage(errorTokens, i);
             server.setErrorsPages(errorTokens);
             needsSemicolon = false;
@@ -109,13 +109,13 @@ void ParseConfig::parseServer(Server &server, size_t &i)
         else if (currentToken == "server_name")
             server.setServerName(consumeToken(i));
         else
-            throw invalid_argument("Unsupported directive: '" + currentToken + "'.");
+            throw std::invalid_argument("Unsupported directive: '" + currentToken + "'.");
 
         if (needsSemicolon && consumeToken(i) != ";")
-            throw invalid_argument("Syntax error: too many values in directive " + currentToken);
+            throw std::invalid_argument("Syntax error: too many values in directive " + currentToken);
     }
     if (server.getListens().size() == 0 || server.getRoot().empty())
-        throw invalid_argument("Config file must contain directives 'listen' and 'root'.");
+        throw std::invalid_argument("Config file must contain directives 'listen' and 'root'.");
 }
 
 void ParseConfig::parse()
@@ -123,19 +123,19 @@ void ParseConfig::parse()
     size_t i = 0;
 
     if (_tokens.empty())
-        throw runtime_error("File is empty: must contain [server] block with [listen, root].");
+        throw std::runtime_error("File is empty: must contain [server] block with [listen, root].");
 
     while (i < _tokens.size())
     {
         Server server;
-        const string &currentToken = consumeToken(i);
+        const std::string &currentToken = consumeToken(i);
 
         if (currentToken == "server")
             parseServer(server, i);
         else
-            throw invalid_argument("Config file must start with [server], not " + currentToken + ".");
+            throw std::invalid_argument("Config file must start with [server], not " + currentToken + ".");
 
-        vector<LocationConf> &locations = server.getForModifyLocation();
+        std::vector<LocationConf> &locations = server.getForModifyLocation();
         for (size_t k = 0; k < locations.size(); ++k)
         {
             if (!locations[k].rootIsSet())
@@ -148,7 +148,7 @@ void ParseConfig::parse()
     removeDuplicateListens();
 }
 
-const vector<Server> &ParseConfig::getServers() const
+const std::vector<Server> &ParseConfig::getServers() const
 {
     return servers;
 }
@@ -157,11 +157,11 @@ void ParseConfig::removeDuplicateListens()
 {
     for (size_t i = 0; i < servers.size(); i++)
     {
-        const vector<Listen> &listens_i = servers[i].getListens();
+        const std::vector<Listen> &listens_i = servers[i].getListens();
 
         for (size_t j = i + 1; j < servers.size(); )
         {
-            const vector<Listen> &listens_j = servers[j].getListens();
+            const std::vector<Listen> &listens_j = servers[j].getListens();
             bool duplicate = false;
 
             for (size_t a = 0; a < listens_i.size() && !duplicate; a++)
@@ -179,68 +179,3 @@ void ParseConfig::removeDuplicateListens()
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

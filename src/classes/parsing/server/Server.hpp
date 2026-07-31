@@ -10,11 +10,9 @@ const size_t KB_MULTIPLIER = 1024ULL;
 const size_t MB_MULTIPLIER = 1024ULL * 1024ULL;
 const size_t GB_MULTIPLIER = 1024ULL * 1024ULL * 1024ULL;
 
-using namespace std;
-
 struct Listen{
     long port;
-    string ip;
+    std::string ip;
     bool operator==(const Listen& other) const {
         return ip == other.ip && port == other.port;
     }
@@ -24,34 +22,34 @@ struct Listen{
 class Server
 {
     private:
-        vector<Listen> listens;
-        string _root;
-        vector<string> index;
+        std::vector<Listen> listens;
+        std::string _root;
+        std::vector<std::string> index;
         uint64_t client_max_body_size;
         bool has_set_client_max_body_size;
-        map<int, string> errors_page;
-        vector<LocationConf> locations;
-        string server_name;
+        std::map<int, std::string> errors_page;
+        std::vector<LocationConf> locations;
+        std::string server_name;
 
     public:
         Server();
         ~Server();
 
-        void setListen(const string& );
-        void setRoot(const string& );
-        void setIndex(const vector<string>& );
-        void setClientMaxBodySize(const string& );
-        void setErrorsPages(vector<string>& );
+        void setListen(const std::string& );
+        void setRoot(const std::string& );
+        void setIndex(const std::vector<std::string>& );
+        void setClientMaxBodySize(const std::string& );
+        void setErrorsPages(std::vector<std::string>& );
         void pushLocation(LocationConf& location);
-        void setServerName(const string& name);
+        void setServerName(const std::string& name);
 
-        const string &getServerName() const;
-        const vector<Listen> &getListens() const;
-        const string &getRoot() const;
-        const vector<string>& getIndex() const;
+        const std::string &getServerName() const;
+        const std::vector<Listen> &getListens() const;
+        const std::string &getRoot() const;
+        const std::vector<std::string>& getIndex() const;
         const uint64_t& getClientMaxBodySize() const;
         const bool& hasSetClientMaxBodySize() const;
-        const map<int, string>& getErrorsPages() const;
-        const vector<LocationConf> &getLocations() const;
-        vector <LocationConf>& getForModifyLocation();
+        const std::map<int, std::string>& getErrorsPages() const;
+        const std::vector<LocationConf> &getLocations() const;
+        std::vector <LocationConf>& getForModifyLocation();
 };

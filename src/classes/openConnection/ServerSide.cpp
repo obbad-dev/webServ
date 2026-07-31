@@ -2,7 +2,7 @@
 #include "HttpException.hpp"
 #include "helperFunc.hpp"
 
-ServerSide::ServerSide(const vector<Server> &servers) : servers(servers)
+ServerSide::ServerSide(const std::vector<Server> &servers) : servers(servers)
 {
 }
 
@@ -28,23 +28,23 @@ void ServerSide::create_server_sock()
 {
     for (size_t i = 0; i < servers.size(); i++)
     {
-        const vector<Listen> &tmp_listen = servers[i].getListens();
+        const std::vector<Listen> &tmp_listen = servers[i].getListens();
 
         for (size_t j = 0; j < tmp_listen.size(); j++)
         {
             int sockfd = socket(AF_INET, SOCK_STREAM, 0);
             if (sockfd == -1)
-                throw runtime_error("Socket failed to open");
+                throw std::runtime_error("Socket failed to open");
 
             int opt = 1;
             if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
-                throw runtime_error("Setsockopt failed");
+                throw std::runtime_error("Setsockopt failed");
 
             if (fcntl(sockfd, F_SETFL, O_NONBLOCK) == -1)
-                throw runtime_error("Fcntl for server failed");
+                throw std::runtime_error("Fcntl for server failed");
 
             if (fcntl(sockfd, F_SETFD, FD_CLOEXEC) == -1)
-                throw runtime_error("Fcntl FD_CLOEXEC for server failed");
+                throw std::runtime_error("Fcntl FD_CLOEXEC for server failed");
 
             struct sockaddr_in s_addr;
             bzero(&s_addr, sizeof(s_addr));
@@ -53,10 +53,10 @@ void ServerSide::create_server_sock()
             s_addr.sin_addr.s_addr = inet_addr(tmp_listen[j].ip.c_str());
 
             if (bind(sockfd, reinterpret_cast<sockaddr *>(&s_addr), sizeof(s_addr)) == -1)
-                throw runtime_error("Bind failed");
+                throw std::runtime_error("Bind failed");
 
             if (listen(sockfd, SOMAXCONN) == -1)
-                throw runtime_error("listen failed");
+                throw std::runtime_error("listen failed");
 
             fds.insert(std::make_pair(sockfd, FdManager(SERVER, time(NULL), servers[i], opt, tmp_listen[j])));
         }
@@ -70,13 +70,13 @@ void ServerSide::add_fd_to_epoll(int epoll_fd, int fd, uint32_t events)
     ev.events = events;
     ev.data.fd = fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1)
-        throw runtime_error("Epoll_ctl_add failed");
+        throw std::runtime_error("Epoll_ctl_add failed");
 }
 
 void ServerSide::remove_from_epoll(int epoll_fd, int fd)
 {
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL) == -1)
-        throw runtime_error("Epoll_ctl_del failed");
+        throw std::runtime_error("Epoll_ctl_del failed");
 }
 
 void ServerSide::change_epoll_event(int epoll_fd, int fd, uint32_t events)
@@ -86,10 +86,10 @@ void ServerSide::change_epoll_event(int epoll_fd, int fd, uint32_t events)
     ev.events = events;
     ev.data.fd = fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1)
-        throw runtime_error("Epoll_ctl_mod failed");
+        throw std::runtime_error("Epoll_ctl_mod failed");
 }
 
-void disconnect_client(int fd, FdManager &manager, map<int, int> &cgiToClient)
+void disconnect_client(int fd, FdManager &manager, std::map<int, int> &cgiToClient)
 {
     cleanupCgi(manager, cgiToClient);
     ServerSide::remove_from_epoll(manager.epollFd, fd);
@@ -110,10 +110,10 @@ void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager &se
         }
 
         if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
-            throw runtime_error("Fcntl for client failed");
+            throw std::runtime_error("Fcntl for client failed");
 
         if (fcntl(clientfd, F_SETFD, FD_CLOEXEC) == -1)
-            throw runtime_error("Fcntl FD_CLOEXEC for client failed");
+            throw std::runtime_error("Fcntl FD_CLOEXEC for client failed");
 
         add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
 
@@ -145,8 +145,8 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, FdManager &manag
             {
                 throw HttpException(STATUS_PAYLOAD_TOO_LARGE);
             }
-            string script_path;
-            string interpreter_path;
+            std::string script_path;
+            std::string interpreter_path;
             bool is_cgi = request.isCgi(script_path, interpreter_path, manager);
 
             if (is_cgi)
@@ -168,7 +168,7 @@ void ServerSide::handleClientInput(int epoll_fd, int client_fd, FdManager &manag
     catch (const HttpException &e)
     {
         response.buildErrorResponse(e, manager.blockServer);
-        const string &httpVersion = request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion();
+        const std::string &httpVersion = request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion();
         response.serializeResponse(httpVersion);
         change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
     }
@@ -231,12 +231,12 @@ void ServerSide::handleClientOutput(int epoll_fd, int client_fd, FdManager &mana
 void ServerSide::handleClientTimeouts()
 {
     time_t currentTime = time(NULL);
-    for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end();)
+    for (std::map<int, FdManager>::iterator it = fds.begin(); it != fds.end();)
     {
         if (it->second.type == CLIENT && (currentTime - it->second.lastActivity) > TIMEOUT)
         {
             disconnect_client(it->first, it->second, cgiToClient);
-            map<int, FdManager>::iterator tmp = it++;
+            std::map<int, FdManager>::iterator tmp = it++;
             fds.erase(tmp);
         }
         else
@@ -246,7 +246,7 @@ void ServerSide::handleClientTimeouts()
 
 void ServerSide::resources_cleanup(int epoll_fd)
 {
-    for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
+    for (std::map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
     {
         if (it->second.type == CLIENT)
             cleanupCgi(it->second, cgiToClient);
@@ -268,17 +268,17 @@ void ServerSide::server_life_cycle(int epoll_fd)
         {
             if (errno == EINTR)
                 continue;
-            throw runtime_error("Epoll wait failed");
+            throw std::runtime_error("Epoll wait failed");
         }
 
         for (int i = 0; i < epoll_ready; i++)
         {
             int current_fd = event_arr[i].data.fd;
 
-            map<int, int>::iterator cgi_it = cgiToClient.find(current_fd);
+            std::map<int, int>::iterator cgi_it = cgiToClient.find(current_fd);
             int client_fd = (cgi_it != cgiToClient.end()) ? cgi_it->second : current_fd;
 
-            map<int, FdManager>::iterator manager_it = fds.find(client_fd);
+            std::map<int, FdManager>::iterator manager_it = fds.find(client_fd);
             if (manager_it == fds.end())
                 continue;
             if (manager_it->second.type == SERVER)
@@ -304,12 +304,15 @@ void ServerSide::server_life_cycle(int epoll_fd)
 
 void ServerSide::communication_part()
 {
-    int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+    int epoll_fd = epoll_create(1);
 
     if (epoll_fd == -1)
-        throw runtime_error("Epoll creation failed");
+        throw std::runtime_error("Epoll creation failed");
 
-    for (map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
+    if (fcntl(epoll_fd, F_SETFD, FD_CLOEXEC) == -1)
+        throw std::runtime_error("Fcntl FD_CLOEXEC for epoll failed");
+
+    for (std::map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
     {
         add_fd_to_epoll(epoll_fd, it->first, EPOLLIN);
     }
@@ -319,13 +322,26 @@ void ServerSide::communication_part()
     resources_cleanup(epoll_fd);
 }
 
-map<string, string> FdManager::extensions;
+std::map<std::string, std::string> FdManager::extensions;
 
 void ServerSide::setup()
 {
-    create_server_sock();
+    try
+    {
+        create_server_sock();
 
-    init_extensions_map();
+        init_extensions_map();
 
-    communication_part();
+        communication_part();
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+        for (std::map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
+        {
+            close (it->first);
+            if (it == fds.begin() && it->second.epollFd != -1)
+                close (it->second.epollFd);
+        }
+    }
 }

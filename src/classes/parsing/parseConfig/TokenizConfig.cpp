@@ -6,31 +6,31 @@
 #include <stdexcept>
 #include <algorithm>
 
-void ParseConfig::tokenizeErrorPage(vector<string> &errorTokens, size_t &i)
+void ParseConfig::tokenizeErrorPage(std::vector<std::string> &errorTokens, size_t &i)
 {
     while (i < _tokens.size())
     {
-        const string &token = consumeToken(i);
+        const std::string &token = consumeToken(i);
         if (token == ";")
             break;
         if (token == "{" || token == "}")
-            throw invalid_argument("error_page: expected end with ';'");
+            throw std::invalid_argument("error_page: expected end with ';'");
         errorTokens.push_back(token);
     }
     if (errorTokens.size() < 2)
-        throw invalid_argument("error_page: missing status code or URI");
+        throw std::invalid_argument("error_page: missing status code or URI");
 }
 
 void ParseConfig::tokenize()
 {
-    ifstream file(_configFile.c_str());
+    std::ifstream file(_configFile.c_str());
     if (!file.is_open())
-        throw runtime_error("Error: Could not open config file: " + _configFile);
+        throw std::runtime_error("Error: Could not open config file: " + _configFile);
 
-    string line;
-    stack<std::string> bracesCheck;
+    std::string line;
+    std::stack<std::string> bracesCheck;
 
-    while (getline(file, line))
+    while (std::getline(file, line))
     {
         size_t commentPos = line.find('#');
         if (commentPos != std::string::npos)
@@ -49,8 +49,8 @@ void ParseConfig::tokenize()
             }
         }
 
-        istringstream iss(line);
-        string word;
+        std::istringstream iss(line);
+        std::string word;
 
         while (iss >> word)
         {
@@ -61,56 +61,56 @@ void ParseConfig::tokenize()
                 else if (!bracesCheck.empty() && word == "}" && bracesCheck.top() == "{")
                     bracesCheck.pop();
                 else
-                    throw runtime_error("Error: Unmatched closing brace '}'");
+                    throw std::runtime_error("Error: Unmatched closing brace '}'");
             }
             _tokens.push_back(word);
         }
     }
 
     if (!bracesCheck.empty())
-        throw runtime_error("Error: Unclosed brace '{'");
+        throw std::runtime_error("Error: Unclosed brace '{'");
 }
 
-const vector <string> ParseConfig::tokenizeMethods(size_t &i)
+const std::vector <std::string> ParseConfig::tokenizeMethods(size_t &i)
 {
-    vector<string> methods;
+    std::vector<std::string> methods;
 
     while (i < _tokens.size())
     {
-        const string &token = consumeToken(i);
+        const std::string &token = consumeToken(i);
         if (token == ";")
             break;
         else if (token == "{" || token == "}")
-            throw invalid_argument("allow_methods: expected end with ';'");
+            throw std::invalid_argument("allow_methods: expected end with ';'");
         methods.push_back(token);
     }
     if (methods.empty())
-        throw invalid_argument("allow_methods: no methods specified.");
+        throw std::invalid_argument("allow_methods: no methods specified.");
 
     return methods;
 }
-const vector <string> ParseConfig::tokenizeIndex(size_t &i)
+const std::vector <std::string> ParseConfig::tokenizeIndex(size_t &i)
 {
-    vector<string> indexFiles;
+    std::vector<std::string> indexFiles;
 
     while (i < _tokens.size())
     {
-        const string &token = consumeToken(i);
+        const std::string &token = consumeToken(i);
         if (token == ";")
             break;
         else if (token == "{" || token == "}")
-            throw invalid_argument("index: expected end with ';'");
+            throw std::invalid_argument("index: expected end with ';'");
         indexFiles.push_back(token);
     }
     if (indexFiles.empty())
-        throw invalid_argument("index: no index files specified.");
+        throw std::invalid_argument("index: no index files specified.");
 
     return indexFiles;
 }
 
-const string &ParseConfig::consumeToken(size_t &i)
+const std::string &ParseConfig::consumeToken(size_t &i)
 {
     if (i >= _tokens.size())
-        throw invalid_argument("Block not completed.");
+        throw std::invalid_argument("Block not completed.");
     return _tokens[i++];
 }

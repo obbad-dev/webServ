@@ -1,5 +1,4 @@
 #pragma once
-using namespace std;
 #include <string>
 #include <map>
 #include "HttpErrors.hpp"
@@ -10,15 +9,15 @@ class Server;
 class HttpRequest
 {
 private:
-	string raw_buffer;
+	std::string raw_buffer;
 
-	string method;
-	string path;
-	string protocolVersion;
-	string queryString;
+	std::string method;
+	std::string path;
+	std::string protocolVersion;
+	std::string queryString;
 
 	bool headers_parsed;
-	map<string, string> headers;
+	std::map<std::string, std::string> headers;
 
 	bool _keep_alive;
 
@@ -29,7 +28,7 @@ private:
 		CHUNKED
 	} body_type;
 
-	string bodyContent;
+	std::string bodyContent;
 	size_t contentLength;
 	size_t expectedChunkSize;
 
@@ -38,9 +37,9 @@ private:
 	void determineConnectionStatus();
 	void setBodyType();
 	bool readRequest(int &clientFd);
-	void parseBodyContent(string &buffer);
-	void parseChunkedBody(string &buffer);
-	void parseHeaders(string &buffer);
+	void parseBodyContent(std::string &buffer);
+	void parseChunkedBody(std::string &buffer);
+	void parseHeaders(std::string &buffer);
 	void determineClientMaxBodySize(FdManager &fdManager);
 
 	bool debuging;
@@ -58,20 +57,20 @@ public:
 
 	bool isComplete() const { return is_complete; }
 
-	const map<string, string> &getHeaders() const;
-	const string &getMethod() const;
-	const string &getTarget() const;
-	const string &getProtocolVersion() const;
-	const string &getBodyContent() const { return bodyContent; }
-	const string &getQuery() const { return queryString; }
+	const std::map<std::string, std::string> &getHeaders() const;
+	const std::string &getMethod() const;
+	const std::string &getTarget() const;
+	const std::string &getProtocolVersion() const;
+	const std::string &getBodyContent() const { return bodyContent; }
+	const std::string &getQuery() const { return queryString; }
 
 	bool isKeepAlive() const;
-	void setHeaders(string key, string value);
-	void setMethod(string method);
-	void setTarget(string target);
-	void setProtocolVersion(string version);
+	void setHeaders(std::string key, std::string value);
+	void setMethod(std::string method);
+	void setTarget(std::string target);
+	void setProtocolVersion(std::string version);
 
 	bool parseRequest(int clientFd, FdManager &fdManager);
-	bool isCgi(string &script_path, string &interpreter_path, FdManager &manager);
+	bool isCgi(std::string &script_path, std::string &interpreter_path, FdManager &manager);
 	void resetRequest();
 };

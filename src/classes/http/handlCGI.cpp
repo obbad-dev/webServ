@@ -10,11 +10,11 @@
 
 void makeEnvVars(FdManager &fdManager)
 {
-	vector<string> &env_vars = fdManager.env_vars;
+	std::vector<std::string> &env_vars = fdManager.env_vars;
 	env_vars.clear();
 
-	const map<string, string> &headers = fdManager.request.getHeaders();
-	const string content_length = (fdManager.request.getBodyContent().empty()) ? "" : intToString(fdManager.request.getBodyContent().size());
+	const std::map<std::string, std::string> &headers = fdManager.request.getHeaders();
+	const std::string content_length = (fdManager.request.getBodyContent().empty()) ? "" : intToString(fdManager.request.getBodyContent().size());
 
 	env_vars.push_back("PATH_INFO=" + fdManager.request.getTarget());
 
@@ -32,9 +32,9 @@ void makeEnvVars(FdManager &fdManager)
 	env_vars.push_back("GATEWAY_INTERFACE=CGI/1.1");
 	env_vars.push_back("SERVER_SOFTWARE=webServ/1.0");
 
-	for (map<string, string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
+	for (std::map<std::string, std::string>::const_iterator it = headers.begin(); it != headers.end(); ++it)
 	{
-		string key = "HTTP_" + it->first;
+		std::string key = "HTTP_" + it->first;
 		for (size_t i = 0; i < key.length(); ++i)
 		{
 			if (key[i] >= 'a' && key[i] <= 'z')
@@ -88,7 +88,7 @@ static void setPipesNonBlocking(int to_cgi_fd[2], int from_cgi_fd[2])
     }
 }
 
-static void runCGIChild(FdManager &fdManager, const string &scriptName, const string &interpreterPath, int to_cgi_fd[2], int from_cgi_fd[2])
+static void runCGIChild(FdManager &fdManager, const std::string &scriptName, const std::string &interpreterPath, int to_cgi_fd[2], int from_cgi_fd[2])
 {
     dup2(to_cgi_fd[READ], STDIN_FILENO);
     dup2(from_cgi_fd[WRITE], STDOUT_FILENO);
@@ -135,7 +135,7 @@ static void setupParentSide(FdManager &fdManager, pid_t pid,
     }
 }
 
-void HttpResponse::prepareCGI(FdManager &fdManager, const string &scriptName, const string &interpreterPath)
+void HttpResponse::prepareCGI(FdManager &fdManager, const std::string &scriptName, const std::string &interpreterPath)
 {
     if (!interpreterIsExecutable(interpreterPath))
         throw HttpException(STATUS_INTERNAL_SERVER_ERROR);

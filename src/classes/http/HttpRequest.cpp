@@ -26,44 +26,44 @@ HttpRequest::HttpRequest() : method(""), path("")
 }
 HttpRequest::~HttpRequest() {}
 
-const map<string, string> &HttpRequest::getHeaders() const
+const std::map<std::string, std::string> &HttpRequest::getHeaders() const
 {
 	return this->headers;
 }
-const string &HttpRequest::getMethod() const
+const std::string &HttpRequest::getMethod() const
 {
 	return this->method;
 }
-const string &HttpRequest::getTarget() const
+const std::string &HttpRequest::getTarget() const
 {
 	return this->path;
 }
-const string &HttpRequest::getProtocolVersion() const
+const std::string &HttpRequest::getProtocolVersion() const
 {
 	return this->protocolVersion;
 }
 bool HttpRequest::isKeepAlive() const { return _keep_alive; }
 
-void HttpRequest::setHeaders(string key, string value)
+void HttpRequest::setHeaders(std::string key, std::string value)
 {
 	while (value[0] == ' ' || value[0] == '\t')
 	{
 		value.erase(0, 1);
 	}
-	transform(key.begin(), key.end(), key.begin(), ::tolower);
+	std::transform(key.begin(), key.end(), key.begin(), ::tolower);
 	headers[key] = value;
 }
 
-void HttpRequest::setMethod(string method)
+void HttpRequest::setMethod(std::string method)
 {
 	if (method.empty())
 		throw HttpException(STATUS_METHOD_NOT_ALLOWED);
 	this->method = method;
 }
 
-static string urlDecode(const string &src)
+static std::string urlDecode(const std::string &src)
 {
-	string result;
+	std::string result;
 
 	result.reserve(src.size());
 	for (size_t i = 0; i < src.size(); ++i)
@@ -85,13 +85,13 @@ static string urlDecode(const string &src)
 	return result;
 }
 
-void HttpRequest::setTarget(string target)
+void HttpRequest::setTarget(std::string target)
 {
 	if (target.empty() || target[0] != '/')
 		throw HttpException(ERR_INVALID_TARGET);
 
 	size_t pos = target.find("?");
-	if (pos != string::npos)
+	if (pos != std::string::npos)
 	{
 		this->path = urlDecode(target.substr(0, pos));
 		this->queryString = target.substr(pos + 1);
@@ -102,7 +102,7 @@ void HttpRequest::setTarget(string target)
 		this->queryString = "";
 	}
 }
-void HttpRequest::setProtocolVersion(string version)
+void HttpRequest::setProtocolVersion(std::string version)
 {
 	if (version.empty())
 		throw HttpException(ERR_INVALID_PROTOCOL);
@@ -171,23 +171,23 @@ bool HttpRequest::readRequest(int &clientFd)
 	return true;
 }
 
-void HttpRequest::parseHeaders(string &buffer)
+void HttpRequest::parseHeaders(std::string &buffer)
 {
 	size_t pos = buffer.find("\r\n");
-	if (pos == string::npos)
+	if (pos == std::string::npos)
 		throw HttpException(ERR_NO_REQUEST_LINE);
 
-	string requestLine = buffer.substr(0, pos);
+	std::string requestLine = buffer.substr(0, pos);
 	buffer.erase(0, pos + 2);
 
 	size_t methodEnd = requestLine.find(' ');
-	if (methodEnd == string::npos)
+	if (methodEnd == std::string::npos)
 		throw HttpException(ERR_NO_METHOD);
 	setMethod(requestLine.substr(0, methodEnd));
 	requestLine.erase(0, methodEnd + 1);
 
 	size_t targetEnd = requestLine.find(' ');
-	if (targetEnd == string::npos)
+	if (targetEnd == std::string::npos)
 		throw HttpException(ERR_NO_TARGET);
 	setTarget(requestLine.substr(0, targetEnd));
 	requestLine.erase(0, targetEnd + 1);
@@ -196,28 +196,28 @@ void HttpRequest::parseHeaders(string &buffer)
 	while (!buffer.empty())
 	{
 		pos = buffer.find("\r\n");
-		if (pos == string::npos)
+		if (pos == std::string::npos)
 			throw HttpException(ERR_INVALID_HEADER_FMT);
 
-		string headerLine = buffer.substr(0, pos);
+		std::string headerLine = buffer.substr(0, pos);
 		buffer.erase(0, pos + 2);
 
 		if (headerLine.empty())
 			break;
 
 		size_t colonPos = headerLine.find(':');
-		if (colonPos == string::npos)
+		if (colonPos == std::string::npos)
 			throw HttpException(ERR_NO_COLON);
 
-		string key = headerLine.substr(0, colonPos);
-		string value = headerLine.substr(colonPos + 1);
+		std::string key = headerLine.substr(0, colonPos);
+		std::string value = headerLine.substr(colonPos + 1);
 		if (key.empty() && value.empty())
 			throw HttpException(ERR_EMPTY_KEY_VAL);
 		setHeaders(key, value);
 	}
 }
 
-void HttpRequest::parseBodyContent(string &buffer)
+void HttpRequest::parseBodyContent(std::string &buffer)
 {
 	if (buffer.size() < contentLength)
 		return;
@@ -226,14 +226,14 @@ void HttpRequest::parseBodyContent(string &buffer)
 	is_complete = true;
 }
 
-void HttpRequest::parseChunkedBody(string &buffer)
+void HttpRequest::parseChunkedBody(std::string &buffer)
 {
 	while (!buffer.empty())
 	{
 		if (chunk_state == READ_SIZE)
 		{
 			size_t posEndSize = buffer.find("\r\n");
-			if (posEndSize == string::npos)
+			if (posEndSize == std::string::npos)
 				return;
 
 			errno = 0;
@@ -248,7 +248,7 @@ void HttpRequest::parseChunkedBody(string &buffer)
 			if (expectedChunkSize == 0)
 			{
 				size_t endTrailers = buffer.find("\r\n", posEndSize + 2);
-				if (endTrailers == string::npos)
+				if (endTrailers == std::string::npos)
 					return;
 				buffer.erase(0);
 				is_complete = true;
@@ -262,7 +262,7 @@ void HttpRequest::parseChunkedBody(string &buffer)
 			if (buffer.size() < expectedChunkSize + 2)
 				return;
 
-			string content = buffer.substr(0, expectedChunkSize);
+			std::string content = buffer.substr(0, expectedChunkSize);
 			if (buffer.compare(expectedChunkSize, 2, "\r\n") != 0)
 			{
 				throw HttpException(ERR_INVALID_CHUNK_TERM);
@@ -294,11 +294,11 @@ bool HttpRequest::parseRequest(int clientFd, FdManager &fdManager)
 	if (!headers_parsed)
 	{
 		size_t end_headers = raw_buffer.find("\r\n\r\n");
-		if (end_headers == string::npos)
+		if (end_headers == std::string::npos)
 		{
 			return true;
 		}
-		string headerBuffer = raw_buffer.substr(0, end_headers + 2);
+		std::string headerBuffer = raw_buffer.substr(0, end_headers + 2);
 		parseHeaders(headerBuffer);
 		raw_buffer.erase(0, end_headers + 4);
 		setBodyType();
@@ -320,21 +320,21 @@ bool HttpRequest::parseRequest(int clientFd, FdManager &fdManager)
 	return true;
 }
 
-bool HttpRequest::isCgi(string &script_path, string &interpreter_path, FdManager &manager)
+bool HttpRequest::isCgi(std::string &script_path, std::string &interpreter_path, FdManager &manager)
 {
 	size_t dot_pos = path.find_last_of('.');
 
-	if (dot_pos == string::npos)
+	if (dot_pos == std::string::npos)
 		return false;
-	string ext = path.substr(dot_pos);
-	string &path_copy = manager.target_path;
+	std::string ext = path.substr(dot_pos);
+	std::string &path_copy = manager.target_path;
 
 	if (manager.location)
 	{
-		const pair<string, string> &cgiPass = manager.location->getCgiPass();
+		const std::pair<std::string, std::string> &cgiPass = manager.location->getCgiPass();
 		if (manager.location->hasCgiPass() && ext == cgiPass.first)
 		{
-			string root = manager.location->getRoot();
+			std::string root = manager.location->getRoot();
 			realPath(root, path_copy, script_path);
 			interpreter_path = cgiPass.second;
 			return true;

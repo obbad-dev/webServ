@@ -1,7 +1,5 @@
 #pragma once
 
-using namespace std;
-
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -11,25 +9,25 @@ using namespace std;
 class ParseConfig
 {
 private:
-    string _configFile;
-    vector<string> _tokens;
-    vector<Server> servers;
+    std::string _configFile;
+    std::vector<std::string> _tokens;
+    std::vector<Server> servers;
 
     void parseServer(Server &server, size_t &i);
-    void tokenizeErrorPage(vector<string> &, size_t &);
-    const vector<string> tokenizeMethods(size_t& i);
-    const vector<string> tokenizeIndex(size_t& i);
+    void tokenizeErrorPage(std::vector<std::string> &, size_t &);
+    const std::vector<std::string> tokenizeMethods(size_t& i);
+    const std::vector<std::string> tokenizeIndex(size_t& i);
     void parseLocations(Server &server, size_t &i);
-    const string &consumeToken(size_t &i);
+    const std::string &consumeToken(size_t &i);
 
     void removeDuplicateListens();
 
 public:
-    ParseConfig(string configFile);
+    ParseConfig(std::string configFile);
     ~ParseConfig();
 
     void tokenize();
     void parse();
     // void debug();
-    const vector<Server> &getServers() const;
+    const std::vector<Server> &getServers() const;
 };

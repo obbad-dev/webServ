@@ -1,5 +1,4 @@
 #pragma once
-using namespace std;
 
 #include <cerrno>
 #include <string>
@@ -29,10 +28,10 @@ extern int sig;
 class ServerSide
 {
 private:
-  const vector<Server> &servers;
-  map<int, FdManager> fds;
-  map<int, int> cgiToClient;
-  map<int, HttpRequest> httpRequests;
+  const std::vector<Server> &servers;
+  std::map<int, FdManager> fds;
+  std::map<int, int> cgiToClient;
+  std::map<int, HttpRequest> httpRequests;
 
   void acceptNewConnections(int epoll_fd, int server_fd, FdManager &serverManager);
   void handleClientInput(int epoll_fd, int client_fd, FdManager &manager);
@@ -41,7 +40,7 @@ private:
   void handleClientTimeouts();
 
 public:
-  ServerSide(const vector<Server> &servers);
+  ServerSide(const std::vector<Server> &servers);
   ~ServerSide();
 
   void setup();
