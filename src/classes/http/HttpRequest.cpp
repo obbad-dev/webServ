@@ -147,20 +147,27 @@ void HttpRequest::determineConnectionStatus()
 	}
 }
 
+
+
 bool HttpRequest::readRequest(int &clientFd)
 {
-	char buffer[4096];
-	memset(buffer, 0, sizeof(buffer));
+	char *buffer = new char[65536];
+	bzero(buffer, 65536);
 
-	ssize_t byteRead = recv(clientFd, buffer, sizeof(buffer), 0);
-	if (byteRead == 0)
+	ssize_t byteRead = recv(clientFd, buffer, 65536, 0);
+	if (byteRead == 0){
+		delete[] buffer;
 		return false;
+	}
+
 	if (byteRead < 0)
 	{
+		delete[] buffer;
 		throw HttpException(ERR_READ);
 	}
 	else
 		raw_buffer.append(buffer, byteRead);
+	delete[] buffer;
 	return true;
 }
 
@@ -335,4 +342,22 @@ bool HttpRequest::isCgi(string &script_path, string &interpreter_path, FdManager
 	}
 
 	return false;
+}
+
+void HttpRequest::resetRequest()
+{
+	raw_buffer.clear();
+	method.clear();
+	path.clear();
+	protocolVersion.clear();
+	queryString.clear();
+	headers.clear();
+	_keep_alive = false;
+	body_type = NONE;
+	bodyContent.clear();
+	contentLength = 0;
+	expectedChunkSize = 0;
+	is_complete = false;
+	headers_parsed = false;
+	chunk_state = READ_SIZE;
 }
