@@ -116,4 +116,6 @@ public:
   static void change_epoll_event(int epoll_fd, int fd, uint32_t events);
   static void add_fd_to_epoll(int epoll_fd, int fd, uint32_t events);
   static void remove_from_epoll(int epoll_fd, int fd);
+  void resources_cleanup(int epoll_fd);
+  void server_life_cycle(int epoll_fd);
 };

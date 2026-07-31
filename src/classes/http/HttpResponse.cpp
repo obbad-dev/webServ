@@ -120,81 +120,46 @@ void HttpResponse::buildErrorResponse(const HttpException &e, const Server &serv
 	response_body = content;
 }
 
+void HttpResponse::setResponseBody(const char *buffer, size_t size)
+{
+	response_body.append(buffer, size);
+}
 
+int HttpResponse::getStatusCode() const
+{
+	return status_code;
+}
+const string &HttpResponse::getMessage() const
+{
+	return message;
+}
+const map<string, string> &HttpResponse::getResponseHeaders() const
+{
+	return response_headers;
+}
+const string &HttpResponse::getResponseBody() const
+{
+	return response_body;
+}
+void HttpResponse::setStatusCode(int status_code)
+{
+	this->status_code = status_code;
+}
 
-	
-	
-	
-
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-
-	
-	
-	
-	
-	
-
+void HttpResponse::resetObjectResponse() {
+	response_serialized.clear();
+	status_code = 0;
+	message.clear();
+	response_headers.clear();
+	response_body.clear();
+	bytesSent = 0; 
+}
 
 string generateDirectoryListing(const string &dirPath, const string &uriPath)
 {
     DIR *dir = opendir(dirPath.c_str());
     if (!dir)
-    {
         return "";
-    }
 
     stringstream ss;
     ss << "<html><head><title>Index of " << uriPath << "</title></head><body>\n";
@@ -305,219 +270,229 @@ bool getDataFromRequest(string &filename, string &filebody, const string &reques
 	return true;
 }
 
+void handleReturn(HttpResponse &response, HttpRequest &request, const LocationConf *location)
+{
+	pair<int, string> redir = location->getReturn();
+	response.setStatusCode(redir.first);
+	response.setMessage(HttpResponse::getDefaultStatusMessage(redir.first));
+	response.setResponseHeader("Location", redir.second);
+	response.setResponseBody("Redirecting...");
+	response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+}
+
+bool checkAllowedMethod(HttpResponse &response, HttpRequest &request, const LocationConf *location, const Server &server)
+{
+	const set<string> &allowed = location->getAllowMethods();
+	if (allowed.find(request.getMethod()) == allowed.end())
+	{
+		response.buildErrorResponse(HttpException(STATUS_METHOD_NOT_ALLOWED), server);
+		string allowHeader;
+		for (set<string>::const_iterator it = allowed.begin(); it != allowed.end(); ++it)
+		{
+			if (it != allowed.begin())
+				allowHeader += ", ";
+			allowHeader += *it;
+		}
+		response.setResponseHeader("Allow", allowHeader);
+		response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+		return false;
+	}
+	return true;
+}
+
+void getMethod(const LocationConf *location, string &physicalPath, string &path,
+		HttpResponse &response, HttpRequest &request, const Server &server)
+{
+	struct stat pathStat;
+
+	if (stat(physicalPath.c_str(), &pathStat) != 0)
+	{
+		throw HttpException(STATUS_NOT_FOUND);
+	}
+	if (S_ISDIR(pathStat.st_mode))
+	{
+		const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
+		bool indexFound = false;
+		for (size_t i = 0; i < indexes.size(); ++i)
+		{
+			string testIndex = physicalPath;
+			if (testIndex[testIndex.size() - 1] != '/')
+				testIndex += "/";
+			testIndex += indexes[i];
+			struct stat indexStat;
+			if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
+			{
+				physicalPath = testIndex;
+				indexFound = true;
+				break;
+			}
+		}
+
+		if (!indexFound)
+		{
+			if (location && location->hasAutoindex())
+			{
+				string listing = generateDirectoryListing(physicalPath, path);
+				if (listing.empty())
+					throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+				response.setStatusCode(200);
+				response.setMessage("OK");
+				response.setResponseHeader("Content-Type", "text/html");
+				response.setResponseHeader("Content-Length", intToString(listing.size()));
+				response.setResponseBody(listing);
+				response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+				return;
+			}
+			else
+			{
+				throw HttpException(STATUS_NOT_FOUND);
+			}
+		}
+	}
+
+	if (stat(physicalPath.c_str(), &pathStat) != 0)
+		throw HttpException(STATUS_NOT_FOUND);
+
+	if (!S_ISREG(pathStat.st_mode))
+		throw HttpException(STATUS_FORBIDDEN);
+
+	string body;
+	if (!read_content(body, physicalPath))		
+		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+
+	response.setStatusCode(200);
+	response.setMessage("OK");
+	response.setResponseHeader("Content-Type", getMimeType(physicalPath, "application/octet-stream"));
+	response.setResponseHeader("Content-Length", intToString(body.size()));
+	response.setResponseBody(body);
+}
+
+void postMethod(const LocationConf *location, HttpResponse &response, HttpRequest &request)
+{
+	struct stat pathStat;
+
+	if (location && location->uploadEnabledStatus())
+	{
+		string uploadDir = location->getUploadPath();
+
+		if (stat(uploadDir.c_str(), &pathStat) == 0 && !S_ISDIR(pathStat.st_mode))
+			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+
+		const map<string, string> &headers = request.getHeaders();
+		map<string, string>::const_iterator it = headers.find("content-type");
+
+		if (it == headers.end())
+			throw HttpException(STATUS_BAD_REQUEST);
+
+		string content_type = it->second;
+		string finalUploadPath, filebody;
+
+		if (content_type.find("multipart/form-data") != std::string::npos)
+		{
+			string boundary;
+			if (getBoundary(content_type, boundary) == false)
+				throw HttpException(STATUS_BAD_REQUEST);
+
+			string filename;
+			if (getDataFromRequest(filename, filebody, request.getBodyContent(), boundary) == false)
+				throw HttpException(STATUS_BAD_REQUEST);
+
+			if (realPath(uploadDir, filename, finalUploadPath) == false)
+				throw HttpException(STATUS_BAD_REQUEST);
+		}
+		else
+		{
+			if (realPath(uploadDir, "file.bin", finalUploadPath) == false)
+				throw HttpException(STATUS_BAD_REQUEST);
+
+			filebody = request.getBodyContent();
+		}
+
+		ofstream outFile(finalUploadPath.c_str(), ios::binary);
+		if (!outFile.is_open())
+		{
+			
+			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+		}
+
+		outFile.write(filebody.data(), filebody.size());
+
+		if (outFile.bad())
+			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+
+		response.setStatusCode(201);
+		response.setMessage("Created");
+		response.setResponseHeader("Content-Type", "text/plain");
+		string bodyContent = "File uploaded successfully: " + finalUploadPath;
+		response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
+		response.setResponseBody(bodyContent);
+	}
+	else
+	{
+		response.setStatusCode(200);
+		response.setMessage("OK");
+		response.setResponseHeader("Content-Type", "text/plain");
+		string bodyContent = "POST request received";
+		response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
+		response.setResponseBody(bodyContent);
+		
+	}
+}
+
+void deleteMethod(string &physicalPath, HttpResponse &response)
+{
+	if (access(physicalPath.c_str(), F_OK) != 0)
+		throw HttpException(STATUS_NOT_FOUND);
+	if (std::remove(physicalPath.c_str()) == 0)
+	{
+		response.setStatusCode(204);
+		response.setMessage("No Content");
+		response.setResponseBody("");
+	}
+	else
+		throw HttpException(STATUS_FORBIDDEN);
+}
+
 void HttpResponse::buildStaticResponse(FdManager &manager)
 {
 	HttpRequest &request = manager.request;
     HttpResponse &response = manager.response;
     const Server &server = manager.blockServer;
 
-	
 	string &path = manager.target_path;
 	const LocationConf *location = manager.location;
 
 	if (location && location->hasReturn())
 	{
-		pair<int, string> redir = location->getReturn();
-		response.setStatusCode(redir.first);
-		response.setMessage(HttpResponse::getDefaultStatusMessage(redir.first));
-		response.setResponseHeader("Location", redir.second);
-		response.setResponseBody("Redirecting...");
-		response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
+		handleReturn(response, request, location);
 		return;
 	}
 
-	if (location)
-	{
-		const set<string> &allowed = location->getAllowMethods();
-		if (allowed.find(request.getMethod()) == allowed.end())
-		{
-			
-			response.buildErrorResponse(HttpException(STATUS_METHOD_NOT_ALLOWED), server);
-			string allowHeader;
-			for (set<string>::const_iterator it = allowed.begin(); it != allowed.end(); ++it)
-			{
-				if (it != allowed.begin())
-					allowHeader += ", ";
-				allowHeader += *it;
-			}
-			response.setResponseHeader("Allow", allowHeader);
-			response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
-			return;
-		}
-	}
-	struct stat pathStat;
+	// if (location)
+	// {
+	// 	if (!checkAllowedMethod(response, request, location, server))
+	// 		return;
+	// }
+
 	string physicalPath;
 	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
-	
-	
 
 	if (!realPath(root, path, physicalPath))
 	{
 		throw HttpException(STATUS_FORBIDDEN); 
 	}
+
 	if (request.getMethod() == "GET")
-	{
-		if (stat(physicalPath.c_str(), &pathStat) != 0)
-		{
-			throw HttpException(STATUS_NOT_FOUND);
-		}
-		if (S_ISDIR(pathStat.st_mode))
-		{
-			const vector<string> &indexes = (location && location->indexIsSet()) ? location->getIndex() : server.getIndex();
-			bool indexFound = false;
-			for (size_t i = 0; i < indexes.size(); ++i)
-			{
-				string testIndex = physicalPath;
-				if (testIndex[testIndex.size() - 1] != '/')
-					testIndex += "/";
-				testIndex += indexes[i];
-				struct stat indexStat;
-				if (stat(testIndex.c_str(), &indexStat) == 0 && S_ISREG(indexStat.st_mode))
-				{
-					physicalPath = testIndex;
-					indexFound = true;
-					break;
-				}
-			}
+		getMethod(location, physicalPath, path, response, request, server);
 
-			if (!indexFound)
-			{
-				
-				if (location && location->hasAutoindex())
-				{
-					string listing = generateDirectoryListing(physicalPath, path);
-					if (listing.empty())
-					{
-						
-						throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-					}
-					response.setStatusCode(200);
-					response.setMessage("OK");
-					response.setResponseHeader("Content-Type", "text/html");
-					response.setResponseHeader("Content-Length", intToString(listing.size()));
-					response.setResponseBody(listing);
-					response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
-					return;
-				}
-				else
-				{
-					throw HttpException(STATUS_NOT_FOUND);
-				}
-			}
-		}
-		
-
-		if (stat(physicalPath.c_str(), &pathStat) != 0)
-		{
-			throw HttpException(STATUS_NOT_FOUND);
-		}
-
-		if (!S_ISREG(pathStat.st_mode))
-		{
-			
-			throw HttpException(STATUS_FORBIDDEN);
-		}
-
-		string body;
-		if (!read_content(body, physicalPath))
-		{
-			
-			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-		}
-		response.setStatusCode(200);
-		response.setMessage("OK");
-		response.setResponseHeader("Content-Type", getMimeType(physicalPath, "application/octet-stream"));
-		response.setResponseHeader("Content-Length", intToString(body.size()));
-		response.setResponseBody(body);
-	}
 	else if (request.getMethod() == "POST")
-	{
-		
-		if (location && location->uploadEnabledStatus())
-		{
-			string uploadDir = location->getUploadPath();
+		postMethod(location, response, request);
 
-			if (stat(uploadDir.c_str(), &pathStat) == 0 && !S_ISDIR(pathStat.st_mode))
-				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-
-			const map<string, string> &headers = request.getHeaders();
-			map<string, string>::const_iterator it = headers.find("content-type");
-
-			if (it == headers.end())
-				throw HttpException(STATUS_BAD_REQUEST);
-
-			string content_type = it->second;
-			string finalUploadPath, filebody;
-
-			if (content_type.find("multipart/form-data") != std::string::npos)
-			{
-				string boundary;
-				if (getBoundary(content_type, boundary) == false)
-					throw HttpException(STATUS_BAD_REQUEST);
-
-				string filename;
-				if (getDataFromRequest(filename, filebody, request.getBodyContent(), boundary) == false)
-					throw HttpException(STATUS_BAD_REQUEST);
-
-				if (realPath(uploadDir, filename, finalUploadPath) == false)
-					throw HttpException(STATUS_BAD_REQUEST);
-			}
-			else
-			{
-				if (realPath(uploadDir, "file.bin", finalUploadPath) == false)
-					throw HttpException(STATUS_BAD_REQUEST);
-
-				filebody = request.getBodyContent();
-			}
-
-			ofstream outFile(finalUploadPath.c_str(), ios::binary);
-			if (!outFile.is_open())
-			{
-				
-				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-			}
-
-			outFile.write(filebody.data(), filebody.size());
-
-			if (outFile.bad())
-				throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-
-			response.setStatusCode(201);
-			response.setMessage("Created");
-			response.setResponseHeader("Content-Type", "text/plain");
-			string bodyContent = "File uploaded successfully: " + finalUploadPath;
-			response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
-			response.setResponseBody(bodyContent);
-		}
-		else
-		{
-			response.setStatusCode(200);
-			response.setMessage("OK");
-			response.setResponseHeader("Content-Type", "text/plain");
-			string bodyContent = "POST request received";
-			response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
-			response.setResponseBody(bodyContent);
-			
-		}
-	}
 	else if (request.getMethod() == "DELETE")
-	{
-		if (access(physicalPath.c_str(), F_OK) != 0)
-			throw HttpException(STATUS_NOT_FOUND);
-		if (std::remove(physicalPath.c_str()) == 0)
-		{
-			response.setStatusCode(204);
-			response.setMessage("No Content");
-			response.setResponseBody("");
-		}
-		else
-		{
-			
-			throw HttpException(STATUS_FORBIDDEN);
-		}
-	}
+		deleteMethod(physicalPath, response);
+
 	const string &version = request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion();
-	response.serializeResponse(version);
+	response.serializeResponse(version); // ach kaydiro had 2 stora ?
 }
 
 void HttpResponse::serializeResponse(const string& httpVersion)
@@ -621,36 +596,6 @@ void HttpResponse::parseCgiOutput()
 	response_headers["Content-Length"] = intToString(response_body.size());
 }
 
-
-int HttpResponse::getStatusCode() const
-{
-	return status_code;
-}
-const string &HttpResponse::getMessage() const
-{
-	return message;
-}
-const map<string, string> &HttpResponse::getResponseHeaders() const
-{
-	return response_headers;
-}
-const string &HttpResponse::getResponseBody() const
-{
-	return response_body;
-}
-void HttpResponse::setStatusCode(int status_code)
-{
-	this->status_code = status_code;
-}
-
-void HttpResponse::resetObjectResponse() {
-	response_serialized.clear();
-	status_code = 0;
-	message.clear();
-	response_headers.clear();
-	response_body.clear();
-	bytesSent = 0; 
-}
 
 int HttpResponse::send_response(int fd)
 {
