@@ -21,7 +21,7 @@ using namespace std;
 #include "HttpResponse.hpp"
 #include "ParseConfig.hpp"
 
-#define TIMEOUT 100000
+#define TIMEOUT 60
 
 enum CONN_TYPE
 {
