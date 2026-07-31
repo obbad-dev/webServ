@@ -468,12 +468,6 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 		return;
 	}
 
-	// if (location)
-	// {
-	// 	if (!checkAllowedMethod(response, request, location, server))
-	// 		return;
-	// }
-
 	string physicalPath;
 	string root = (location && location->rootIsSet()) ? location->getRoot() : server.getRoot();
 
@@ -481,7 +475,10 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	{
 		throw HttpException(STATUS_FORBIDDEN); 
 	}
-
+	if (location && !checkAllowedMethod(response, request, location, server))
+	{
+		return;
+	}
 	if (request.getMethod() == "GET")
 		getMethod(location, physicalPath, path, response, request, server);
 
@@ -491,8 +488,8 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	else if (request.getMethod() == "DELETE")
 		deleteMethod(physicalPath, response);
 
-	const string &version = request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion();
-	response.serializeResponse(version); // ach kaydiro had 2 stora ?
+	const string &version = request.getProtocolVersion();
+	response.serializeResponse(version);
 }
 
 void HttpResponse::serializeResponse(const string& httpVersion)
@@ -577,7 +574,6 @@ void HttpResponse::parseCgiOutput() {
         status_code = 200;
         message = "OK";
     }
-
     response_headers["Content-Length"] = intToString(response_body.size());
 }
 
