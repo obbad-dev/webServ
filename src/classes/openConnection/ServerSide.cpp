@@ -28,6 +28,7 @@ void ServerSide::create_server_sock()
 {
     for (size_t i = 0; i < servers.size(); i++)
     {
+		// std::cerr << "Creating server sockets for server." << std::endl;
         const std::vector<Listen> &tmp_listen = servers[i].getListens();
 
         for (size_t j = 0; j < tmp_listen.size(); j++)
@@ -41,9 +42,13 @@ void ServerSide::create_server_sock()
                 throw std::runtime_error("Setsockopt failed");
 
             if (fcntl(sockfd, F_SETFL, O_NONBLOCK) == -1)
-                throw std::runtime_error("Fcntl for server failed");
+                throw std::runtime_error("Fcntl NON_BLOCKING for server failed");
 
-            if (fcntl(sockfd, F_SETFD, FD_CLOEXEC) == -1)
+			int flags = fcntl(sockfd, F_GETFD);
+			if (flags == -1)
+				throw std::runtime_error("Fcntl F_GETFD for server failed");
+
+            if (fcntl(sockfd, F_SETFD, flags | FD_CLOEXEC) == -1)
                 throw std::runtime_error("Fcntl FD_CLOEXEC for server failed");
 
             struct sockaddr_in s_addr;
@@ -61,6 +66,7 @@ void ServerSide::create_server_sock()
             fds.insert(std::make_pair(sockfd, FdManager(SERVER, time(NULL), servers[i], opt, tmp_listen[j])));
         }
     }
+	// std::cerr << "fds.size() = " << fds.size() << std::endl;
 }
 
 void ServerSide::add_fd_to_epoll(int epoll_fd, int fd, uint32_t events)
@@ -110,10 +116,14 @@ void ServerSide::acceptNewConnections(int epoll_fd, int server_fd, FdManager &se
         }
 
         if (fcntl(clientfd, F_SETFL, O_NONBLOCK) == -1)
-            throw std::runtime_error("Fcntl for client failed");
+            throw std::runtime_error("Fcntl NON_BLOCKING for client failed");
 
-        if (fcntl(clientfd, F_SETFD, FD_CLOEXEC) == -1)
-            throw std::runtime_error("Fcntl FD_CLOEXEC for client failed");
+		int flags = fcntl(clientfd, F_GETFD);
+		if (flags == -1)
+			throw std::runtime_error("Fcntl F_GETFD for client failed");
+
+		if (fcntl(clientfd, F_SETFD, flags | FD_CLOEXEC) == -1)
+			throw std::runtime_error("Fcntl FD_CLOEXEC for client failed");
 
         add_fd_to_epoll(epoll_fd, clientfd, EPOLLIN);
 
@@ -190,6 +200,7 @@ void ServerSide::handleCgiEvent(int epoll_fd, int client_fd, int cgi_fd, uint32_
         }
         if (manager.cgi_state == FINISHED)
         {
+			cleanupCgi(manager, cgiToClient);
             manager.response.parseCgiOutput();
             manager.response.serializeResponse(manager.request.getProtocolVersion());
             change_epoll_event(epoll_fd, client_fd, EPOLLOUT);
@@ -334,9 +345,9 @@ void ServerSide::setup()
 
         communication_part();
     }
-    catch(const std::exception& e)
+    catch(const std::runtime_error& e)
     {
-        std::cerr << e.what() << '\n';
+        std::cerr << e.what() << std::endl;
         for (std::map<int, FdManager>::iterator it = fds.begin(); it != fds.end(); it++)
         {
             close (it->first);

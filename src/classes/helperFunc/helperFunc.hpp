@@ -6,6 +6,7 @@
 #include <string>
 
 struct FdManager;
+#define SIZE_BUFFER 65536
 
 bool realPath(const std::string& root, const std::string& uri, std::string& result);
 std::string getMimeType(std::string& path, std::string msg);

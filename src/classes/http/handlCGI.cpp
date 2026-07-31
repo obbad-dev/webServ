@@ -60,10 +60,10 @@ static bool interpreterIsExecutable(const std::string &interpreterPath)
 
 static void closePipes(int to_cgi_fd[2], int from_cgi_fd[2])
 {
-    if (to_cgi_fd[READ] != -1)   close(to_cgi_fd[READ]);
-    if (to_cgi_fd[WRITE] != -1)  close(to_cgi_fd[WRITE]);
-    if (from_cgi_fd[READ] != -1) close(from_cgi_fd[READ]);
-    if (from_cgi_fd[WRITE] != -1) close(from_cgi_fd[WRITE]);
+    if (to_cgi_fd[READ_END] != -1)   close(to_cgi_fd[READ_END]);
+    if (to_cgi_fd[WRITE_END] != -1)  close(to_cgi_fd[WRITE_END]);
+    if (from_cgi_fd[READ_END] != -1) close(from_cgi_fd[READ_END]);
+    if (from_cgi_fd[WRITE_END] != -1) close(from_cgi_fd[WRITE_END]);
 }
 
 static void createPipes(int to_cgi_fd[2], int from_cgi_fd[2])
@@ -80,8 +80,8 @@ static void createPipes(int to_cgi_fd[2], int from_cgi_fd[2])
 
 static void setPipesNonBlocking(int to_cgi_fd[2], int from_cgi_fd[2])
 {
-    if (fcntl(to_cgi_fd[WRITE], F_SETFL, O_NONBLOCK) == -1 ||
-        fcntl(from_cgi_fd[READ], F_SETFL, O_NONBLOCK) == -1)
+    if (fcntl(to_cgi_fd[WRITE_END], F_SETFL, O_NONBLOCK) == -1 ||
+        fcntl(from_cgi_fd[READ_END], F_SETFL, O_NONBLOCK) == -1)
     {
         closePipes(to_cgi_fd, from_cgi_fd);
         throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
@@ -90,8 +90,8 @@ static void setPipesNonBlocking(int to_cgi_fd[2], int from_cgi_fd[2])
 
 static void runCGIChild(FdManager &fdManager, const std::string &scriptName, const std::string &interpreterPath, int to_cgi_fd[2], int from_cgi_fd[2])
 {
-    dup2(to_cgi_fd[READ], STDIN_FILENO);
-    dup2(from_cgi_fd[WRITE], STDOUT_FILENO);
+    dup2(to_cgi_fd[READ_END], STDIN_FILENO);
+    dup2(from_cgi_fd[WRITE_END], STDOUT_FILENO);
     closePipes(to_cgi_fd, from_cgi_fd);
 
     std::vector<char *> env(fdManager.env_vars.size() + 1);
@@ -112,11 +112,11 @@ static void runCGIChild(FdManager &fdManager, const std::string &scriptName, con
 static void setupParentSide(FdManager &fdManager, pid_t pid,
                              int to_cgi_fd[2], int from_cgi_fd[2])
 {
-    close(to_cgi_fd[READ]);
-    close(from_cgi_fd[WRITE]);
+    close(to_cgi_fd[READ_END]);
+    close(from_cgi_fd[WRITE_END]);
 
-    fdManager.to_cgi_fd        = to_cgi_fd[WRITE];
-    fdManager.from_cgi_fd      = from_cgi_fd[READ];
+    fdManager.to_cgi_fd        = to_cgi_fd[WRITE_END];
+    fdManager.from_cgi_fd      = from_cgi_fd[READ_END];
     fdManager.cgi_pid          = pid;
     fdManager.cgi_state        = NOT_FINISHED;
     fdManager.stat_fd_to_cgi   = NOT_FINISHED;
@@ -163,6 +163,7 @@ void HttpResponse::prepareCGI(FdManager &fdManager, const std::string &scriptNam
 
 static void finishCgiWrite(FdManager &fdManager)
 {
+	fdManager.request.resetBodyContent();
 	ServerSide::remove_from_epoll(fdManager.epollFd, fdManager.to_cgi_fd);
 	close(fdManager.to_cgi_fd);
 	fdManager.stat_fd_to_cgi = FINISHED;
@@ -197,9 +198,9 @@ static void finishCgiRead(FdManager &fdManager)
 
 static void handleCGIRead(FdManager &fdManager)
 {
-	char *buffer = new char[65536];
-	bzero(buffer, 65536);
-	ssize_t bytes_read = read(fdManager.from_cgi_fd, buffer, 65536);
+	char *buffer = new char[SIZE_BUFFER];
+	bzero(buffer, SIZE_BUFFER);
+	ssize_t bytes_read = read(fdManager.from_cgi_fd, buffer, SIZE_BUFFER);
 
 	if (bytes_read == -1)
 	{
@@ -227,7 +228,6 @@ static void handleCGIRead(FdManager &fdManager)
 
 void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events)
 {
-
 	if (triggered_fd == fdManager.to_cgi_fd && (events & (EPOLLERR | EPOLLHUP)))
 	{
 		finishCgiWrite(fdManager);

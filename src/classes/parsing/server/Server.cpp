@@ -9,7 +9,7 @@
 #include <linux/limits.h>
 #include <climits>
 
-Server::Server() : _root(""), client_max_body_size(1048576), has_set_client_max_body_size(false) 
+Server::Server() : _root(""), client_max_body_size(MB_MULTIPLIER), has_set_client_max_body_size(false) 
 {
     index.push_back("index.html");
 }
@@ -148,15 +148,6 @@ void Server::setErrorsPages(std::vector<std::string>& errorTokens)
 void Server::pushLocation(LocationConf& location){
     locations.push_back(location);
 }
-void Server::setServerName(const std::string& name){
-    if (name == ";")
-        throw std::invalid_argument("The 'server_name' directive is Empty");
-    this->server_name = name;
-}
-const std::string &Server::getServerName() const{
-    return this->server_name;
-}
-
 
 const std::vector<Listen> &Server::getListens() const
 {
@@ -173,10 +164,7 @@ const uint64_t &Server::getClientMaxBodySize() const
 {
     return client_max_body_size;
 }
-const bool& Server::hasSetClientMaxBodySize() const
-{
-    return  has_set_client_max_body_size;
-}
+
 const std::map<int, std::string>& Server::getErrorsPages() const {
     return this->errors_page;
 }

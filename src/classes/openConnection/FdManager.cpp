@@ -12,6 +12,7 @@ FdManager::FdManager(CONN_TYPE _type, time_t _lastActivity, const Server &_block
     cgi_bytes_written = 0;
     to_cgi_fd = -1;
     from_cgi_fd = -1;
+	cgi_pid = -1;
     location = NULL;
     client_max_body_size = static_cast<size_t>(blockServer.getClientMaxBodySize());
 }
@@ -23,6 +24,7 @@ void FdManager::reset()
     cgi_state = FINISHED;
     to_cgi_fd = -1;
     from_cgi_fd = -1;
+	cgi_pid = -1;
     stat_fd_to_cgi = FINISHED;
     stat_fd_from_cgi = FINISHED;
     cgi_bytes_written = 0;

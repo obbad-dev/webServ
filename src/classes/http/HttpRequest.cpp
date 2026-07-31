@@ -147,15 +147,14 @@ void HttpRequest::determineConnectionStatus()
 	}
 }
 
-
-
 bool HttpRequest::readRequest(int &clientFd)
 {
-	char *buffer = new char[65536];
-	bzero(buffer, 65536);
+	char *buffer = new char[SIZE_BUFFER];
+	bzero(buffer, SIZE_BUFFER);
 
-	ssize_t byteRead = recv(clientFd, buffer, 65536, 0);
-	if (byteRead == 0){
+	ssize_t byteRead = recv(clientFd, buffer, SIZE_BUFFER, 0);
+	if (byteRead == 0)
+	{
 		delete[] buffer;
 		return false;
 	}
@@ -163,7 +162,7 @@ bool HttpRequest::readRequest(int &clientFd)
 	if (byteRead < 0)
 	{
 		delete[] buffer;
-		throw HttpException(ERR_READ);
+		return false;
 	}
 	else
 		raw_buffer.append(buffer, byteRead);
@@ -222,7 +221,7 @@ void HttpRequest::parseBodyContent(std::string &buffer)
 	if (buffer.size() < contentLength)
 		return;
 	this->bodyContent = buffer.substr(0, contentLength);
-	buffer.erase(0, contentLength);
+	std::string().swap(buffer);
 	is_complete = true;
 }
 
@@ -240,17 +239,15 @@ void HttpRequest::parseChunkedBody(std::string &buffer)
 			char *end = NULL;
 			long parsed_len = strtol(buffer.substr(0, posEndSize).c_str(), &end, 16);
 			if (errno == ERANGE || *end != '\0' || parsed_len < 0)
-			{
 				throw HttpException(ERR_INVALID_HEX_SIZE);
-			}
 			expectedChunkSize = static_cast<size_t>(parsed_len);
-
 			if (expectedChunkSize == 0)
 			{
 				size_t endTrailers = buffer.find("\r\n", posEndSize + 2);
 				if (endTrailers == std::string::npos)
 					return;
-				buffer.erase(0);
+
+				std::string().swap(buffer);
 				is_complete = true;
 				return;
 			}
@@ -262,14 +259,14 @@ void HttpRequest::parseChunkedBody(std::string &buffer)
 			if (buffer.size() < expectedChunkSize + 2)
 				return;
 
-			std::string content = buffer.substr(0, expectedChunkSize);
 			if (buffer.compare(expectedChunkSize, 2, "\r\n") != 0)
-			{
 				throw HttpException(ERR_INVALID_CHUNK_TERM);
-			}
+
+			bodyContent.append(buffer, 0, expectedChunkSize);
 			buffer.erase(0, expectedChunkSize + 2);
-			bodyContent.append(content);
 			chunk_state = READ_SIZE;
+			if (buffer.empty())
+				std::string().swap(buffer);
 		}
 	}
 }
@@ -287,7 +284,6 @@ void HttpRequest::determineClientMaxBodySize(FdManager &fdManager)
 
 bool HttpRequest::parseRequest(int clientFd, FdManager &fdManager)
 {
-
 	if (!readRequest(clientFd))
 		return false;
 
@@ -346,18 +342,35 @@ bool HttpRequest::isCgi(std::string &script_path, std::string &interpreter_path,
 
 void HttpRequest::resetRequest()
 {
-	raw_buffer.clear();
-	method.clear();
-	path.clear();
-	protocolVersion.clear();
-	queryString.clear();
-	headers.clear();
+	std::string().swap(raw_buffer);
+	std::string().swap(method);
+	std::string().swap(path);
+	std::string().swap(protocolVersion);
+	std::string().swap(queryString);
+	std::map<std::string, std::string>().swap(headers);
 	_keep_alive = false;
 	body_type = NONE;
-	bodyContent.clear();
+	std::string().swap(bodyContent);
 	contentLength = 0;
 	expectedChunkSize = 0;
 	is_complete = false;
 	headers_parsed = false;
 	chunk_state = READ_SIZE;
+}
+
+std::string &HttpRequest::getBodyContent()
+{
+	return bodyContent;
+}
+const std::string &HttpRequest::getQuery() const
+{
+	return queryString;
+}
+void HttpRequest::resetBodyContent()
+{
+	std::string().swap(bodyContent);
+}
+bool HttpRequest::isComplete() const
+{
+	return is_complete;
 }

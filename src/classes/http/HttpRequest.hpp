@@ -55,14 +55,14 @@ public:
 	HttpRequest();
 	~HttpRequest();
 
-	bool isComplete() const { return is_complete; }
+	bool isComplete() const ;
 
 	const std::map<std::string, std::string> &getHeaders() const;
 	const std::string &getMethod() const;
 	const std::string &getTarget() const;
 	const std::string &getProtocolVersion() const;
-	const std::string &getBodyContent() const { return bodyContent; }
-	const std::string &getQuery() const { return queryString; }
+	std::string &getBodyContent() ;
+	const std::string &getQuery() const ;
 
 	bool isKeepAlive() const;
 	void setHeaders(std::string key, std::string value);
@@ -73,4 +73,5 @@ public:
 	bool parseRequest(int clientFd, FdManager &fdManager);
 	bool isCgi(std::string &script_path, std::string &interpreter_path, FdManager &manager);
 	void resetRequest();
+	void resetBodyContent();
 };

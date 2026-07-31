@@ -106,8 +106,6 @@ void ParseConfig::parseServer(Server &server, size_t &i)
             parseLocations(server, i);
             needsSemicolon = false;
         }
-        else if (currentToken == "server_name")
-            server.setServerName(consumeToken(i));
         else
             throw std::invalid_argument("Unsupported directive: '" + currentToken + "'.");
 
@@ -173,7 +171,7 @@ void ParseConfig::removeDuplicateListens()
                 }
             }
             if (duplicate)
-                servers.erase(servers.begin() + j);
+                throw std::invalid_argument("Duplicate listen directive in two different server blocks" );
             else
                 j++;
         }

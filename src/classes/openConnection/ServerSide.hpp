@@ -21,7 +21,7 @@
 #include "ParseConfig.hpp"
 #include "FdManager.hpp"
 
-#define TIMEOUT 60
+#define TIMEOUT 300
 
 extern int sig;
 

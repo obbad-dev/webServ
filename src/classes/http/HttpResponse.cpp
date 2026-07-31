@@ -136,12 +136,12 @@ void HttpResponse::setStatusCode(int status_code)
 
 void HttpResponse::resetObjectResponse()
 {
-	response_serialized.clear();
-	status_code = 0;
-	message.clear();
-	response_headers.clear();
-	response_body.clear();
-	bytesSent = 0;
+    std::string().swap(response_serialized);
+    status_code = 0;
+    std::string().swap(message);
+    std::map<std::string, std::string>().swap(response_headers);
+    std::string().swap(response_body);
+    bytesSent = 0;
 }
 
 std::string generateDirectoryListing(const std::string &dirPath, const std::string &uriPath)
@@ -290,7 +290,7 @@ bool checkAllowedMethod(HttpResponse &response, HttpRequest &request, const Loca
 }
 
 void getMethod(const LocationConf *location, std::string &physicalPath, std::string &path,
-			   HttpResponse &response, HttpRequest &request, const Server &server)
+			   HttpResponse &response, const Server &server)
 {
 	struct stat pathStat;
 
@@ -329,7 +329,6 @@ void getMethod(const LocationConf *location, std::string &physicalPath, std::str
 				response.setResponseHeader("Content-Type", "text/html");
 				response.setResponseHeader("Content-Length", intToString(listing.size()));
 				response.setResponseBody(listing);
-				response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
 				return;
 			}
 			else
@@ -467,8 +466,9 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	{
 		return;
 	}
+
 	if (request.getMethod() == "GET")
-		getMethod(location, physicalPath, path, response, request, server);
+		getMethod(location, physicalPath, path, response, server);
 
 	else if (request.getMethod() == "POST")
 		postMethod(location, response, request);
@@ -482,7 +482,6 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 
 void HttpResponse::serializeResponse(const std::string &httpVersion)
 {
-
 	response_serialized.clear();
 	response_serialized.append(httpVersion + " " + intToString(status_code) + " " + message + "\r\n");
 	for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)
@@ -491,6 +490,7 @@ void HttpResponse::serializeResponse(const std::string &httpVersion)
 	}
 	response_serialized.append("\r\n");
 	response_serialized.append(response_body);
+	std::string().swap(response_body);
 }
 
 void HttpResponse::setMessage(const std::string &message)
@@ -517,7 +517,6 @@ std::string trimWhitespace(const std::string &str)
 
 void HttpResponse::parseCgiOutput()
 {
-
 	size_t header_end = response_body.find("\r\n\r\n");
 	size_t sep_len = 4;
 
@@ -526,9 +525,18 @@ void HttpResponse::parseCgiOutput()
 		header_end = response_body.find("\n\n");
 		sep_len = 2;
 	}
-
+	if (header_end == std::string::npos)     // Bug 8: no blank line at all
+    {
+        // treat the whole output as a body; npos + 2 wraps to 1 and eats bytes
+        status_code = 200;
+        message = "OK";
+        if (response_headers.find("Content-Type") == response_headers.end())
+            response_headers["Content-Type"] = "text/html";
+        response_headers["Content-Length"] = intToString(response_body.size());
+        return;
+    }
 	std::string headers_str = response_body.substr(0, header_end);
-	std::string new_body = response_body.substr(header_end + sep_len);
+	response_body = response_body.erase(0, header_end + sep_len);
 
 	std::istringstream iss(headers_str);
 	std::string line;
@@ -564,8 +572,6 @@ void HttpResponse::parseCgiOutput()
 			response_headers[key] = value;
 		}
 	}
-
-	response_body = new_body;
 
 	if (status_code == 0)
 	{

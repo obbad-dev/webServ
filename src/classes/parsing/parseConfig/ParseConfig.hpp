@@ -28,6 +28,5 @@ public:
 
     void tokenize();
     void parse();
-    // void debug();
     const std::vector<Server> &getServers() const;
 };
