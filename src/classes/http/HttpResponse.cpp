@@ -521,79 +521,64 @@ void HttpResponse::setResponseBody(const std::string &body)
 	response_body = body;
 }
 
-void HttpResponse::parseCgiOutput()
-{
-	size_t header_end = response_body.find("\r\n\r\n");
-	size_t separator_len = 4;
+std::string trimWhitespace(const std::string& str) {
+    size_t start = str.find_first_not_of(" \t");
+    if (start == std::string::npos) 
+		return ""; 
+    size_t end = str.find_last_not_of(" \t");
+    	return str.substr(start, end - start + 1);
+}
 
-	if (header_end == std::string::npos)
-	{
-		header_end = response_body.find("\n\n");
-		separator_len = 2;
-	}
+void HttpResponse::parseCgiOutput() {
 
-	if (header_end != std::string::npos)
-	{
-		std::string headers_str = response_body.substr(0, header_end);
-		std::string new_body = response_body.substr(header_end + separator_len);
+    size_t header_end = response_body.find("\r\n\r\n");
+    size_t sep_len = 4;
 
-		std::istringstream iss(headers_str);
-		std::string line;
-		while (std::getline(iss, line))
-		{
-			if (!line.empty() && line[line.size() - 1] == '\r')
-				line.erase(line.size() - 1);
+    if (header_end == std::string::npos) {
+        header_end = response_body.find("\n\n");
+        sep_len = 2;
+    }
 
-			if (line.empty())
-				continue;
+    std::string headers_str = response_body.substr(0, header_end);
+    std::string new_body = response_body.substr(header_end + sep_len);
 
-			size_t colon_pos = line.find(':');
-			if (colon_pos != std::string::npos)
-			{
-				std::string key = line.substr(0, colon_pos);
-				std::string value = line.substr(colon_pos + 1);
+    std::istringstream iss(headers_str);
+    std::string line;
 
-				
-				size_t start = value.find_first_not_of(" \t");
-				if (start != std::string::npos) {
-					size_t end = value.find_last_not_of(" \t");
-					value = value.substr(start, end - start + 1);
-				} else {
-					value = "";
-				}
+    while (std::getline(iss, line)) {
+        if (!line.empty() && line[line.size() - 1] == '\r') {
+            line.erase(line.size() - 1);
+        }
 
-				if (key == "Status" || key == "status")
-				{
-					std::istringstream status_iss(value);
-					status_iss >> status_code;
-					std::getline(status_iss, message);
-					
-					
-					size_t msg_start = message.find_first_not_of(" \t");
-					if (msg_start != std::string::npos) {
-						size_t msg_end = message.find_last_not_of(" \t");
-						message = message.substr(msg_start, msg_end - msg_start + 1);
-					} else {
-						message = "";
-					}
-				}
-				else
-				{
-					response_headers[key] = value;
-				}
-			}
-		}
+        if (line.empty()) continue; 
 
-		response_body = new_body;
-	}
+        size_t colon_pos = line.find(':');
+        if (colon_pos == std::string::npos) continue; 
 
-	if (status_code == 0)
-	{
-		status_code = 200;
-		message = "OK";
-	}
+        std::string key = line.substr(0, colon_pos);
+        std::string value = trimWhitespace(line.substr(colon_pos + 1));
 
-	response_headers["Content-Length"] = intToString(response_body.size());
+        if (key == "Status" || key == "status") {
+            std::istringstream status_iss(value);
+            status_iss >> status_code; 
+
+            std::string temp_msg;
+            std::getline(status_iss, temp_msg);
+            message = trimWhitespace(temp_msg); 
+        } 
+        else {
+            response_headers[key] = value;
+        }
+    }
+
+    response_body = new_body;
+
+    if (status_code == 0) {
+        status_code = 200;
+        message = "OK";
+    }
+
+    response_headers["Content-Length"] = intToString(response_body.size());
 }
 
 
@@ -603,15 +588,12 @@ int HttpResponse::send_response(int fd)
 
 	if (n == -1)
 	{
-		
 		return -1;
 	}
-
 	bytesSent += n;
-	
 	if (bytesSent >= response_serialized.size())
 		return 1;
-
+	
 	return 0;
 }
 
