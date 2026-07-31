@@ -22,18 +22,10 @@ HttpResponse::~HttpResponse()
 {
 }
 
-std::string HttpResponse::getDefaultStatusMessage(int statusCode)
+std::string HttpResponse::getMessageStatusOfReturn(int statusCode)
 {
 	switch (statusCode)
 	{
-	case 200:
-		return "OK";
-	case 201:
-		return "Created";
-	case 202:
-		return "Accepted";
-	case 204:
-		return "No Content";
 	case 301:
 		return "Moved Permanently";
 	case 302:
@@ -71,27 +63,27 @@ bool read_content(string &content, string &path)
 
 	if (!file.is_open())
 	{
-		
+
 		return false;
 	}
 
-    std::ostringstream tmp;
-    tmp << file.rdbuf();
+	std::ostringstream tmp;
+	tmp << file.rdbuf();
 
-    if (file.bad())
+	if (file.bad())
 	{
-		
-        return false;
+
+		return false;
 	}
 
-    content = tmp.str();
+	content = tmp.str();
 
 	return true;
 }
 
 void HttpResponse::buildErrorResponse(const HttpException &e, const Server &server)
 {
-	
+
 	string content;
 	bool founErroPage = false;
 
@@ -146,67 +138,68 @@ void HttpResponse::setStatusCode(int status_code)
 	this->status_code = status_code;
 }
 
-void HttpResponse::resetObjectResponse() {
+void HttpResponse::resetObjectResponse()
+{
 	response_serialized.clear();
 	status_code = 0;
 	message.clear();
 	response_headers.clear();
 	response_body.clear();
-	bytesSent = 0; 
+	bytesSent = 0;
 }
 
 string generateDirectoryListing(const string &dirPath, const string &uriPath)
 {
-    DIR *dir = opendir(dirPath.c_str());
-    if (!dir)
-        return "";
+	DIR *dir = opendir(dirPath.c_str());
+	if (!dir)
+		return "";
 
-    stringstream ss;
-    ss << "<html><head><title>Index of " << uriPath << "</title></head><body>\n";
-    ss << "<h1>Index of " << uriPath << "</h1><hr><ul>\n";
+	stringstream ss;
+	ss << "<html><head><title>Index of " << uriPath << "</title></head><body>\n";
+	ss << "<h1>Index of " << uriPath << "</h1><hr><ul>\n";
 
-    if (uriPath != "/" && !uriPath.empty())
-    {
-        ss << "<li><a href=\"../\">../ (Parent Directory)</a></li>\n";
-    }
+	if (uriPath != "/" && !uriPath.empty())
+	{
+		ss << "<li><a href=\"../\">../ (Parent Directory)</a></li>\n";
+	}
 
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL)
-    {
-        string name = entry->d_name;
-        if (name == "." || name == "..")
-            continue;
+	struct dirent *entry;
+	while ((entry = readdir(dir)) != NULL)
+	{
+		string name = entry->d_name;
+		if (name == "." || name == "..")
+			continue;
 
-        string fullPath = dirPath;
-        if (fullPath.empty() || fullPath[fullPath.size() - 1] != '/')
-            fullPath += "/";
-        fullPath += name;
+		string fullPath = dirPath;
+		if (fullPath.empty() || fullPath[fullPath.size() - 1] != '/')
+			fullPath += "/";
+		fullPath += name;
 
-        struct stat s;
-        bool isDir = false;
-        if (stat(fullPath.c_str(), &s) == 0)
-        {
-            if (S_ISDIR(s.st_mode))
-            {
-                isDir = true;
-            }
-        }
+		struct stat s;
+		bool isDir = false;
+		if (stat(fullPath.c_str(), &s) == 0)
+		{
+			if (S_ISDIR(s.st_mode))
+			{
+				isDir = true;
+			}
+		}
 
-        string linkName = name;
-        if (isDir)
-            linkName += "/";
-            
-        ss << "<li><a href=\"" << linkName << "\">" << linkName << "</a></li>\n";
-    }
-    closedir(dir);
-    ss << "</ul><hr></body></html>";
-    return ss.str();
+		string linkName = name;
+		if (isDir)
+			linkName += "/";
+
+		ss << "<li><a href=\"" << linkName << "\">" << linkName << "</a></li>\n";
+	}
+	closedir(dir);
+	ss << "</ul><hr></body></html>";
+	return ss.str();
 }
 
 bool getBoundary(string &content_type, string &boundary)
 {
 	size_t pos = content_type.find("boundary=");
-	
+
 	if (pos == std::string::npos)
 		return false;
 
@@ -274,7 +267,7 @@ void handleReturn(HttpResponse &response, HttpRequest &request, const LocationCo
 {
 	pair<int, string> redir = location->getReturn();
 	response.setStatusCode(redir.first);
-	response.setMessage(HttpResponse::getDefaultStatusMessage(redir.first));
+	response.setMessage(HttpResponse::getMessageStatusOfReturn(redir.first));
 	response.setResponseHeader("Location", redir.second);
 	response.setResponseBody("Redirecting...");
 	response.serializeResponse(request.getProtocolVersion().empty() ? "HTTP/1.1" : request.getProtocolVersion());
@@ -301,7 +294,7 @@ bool checkAllowedMethod(HttpResponse &response, HttpRequest &request, const Loca
 }
 
 void getMethod(const LocationConf *location, string &physicalPath, string &path,
-		HttpResponse &response, HttpRequest &request, const Server &server)
+			   HttpResponse &response, HttpRequest &request, const Server &server)
 {
 	struct stat pathStat;
 
@@ -357,7 +350,7 @@ void getMethod(const LocationConf *location, string &physicalPath, string &path,
 		throw HttpException(STATUS_FORBIDDEN);
 
 	string body;
-	if (!read_content(body, physicalPath))		
+	if (!read_content(body, physicalPath))
 		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 
 	response.setStatusCode(200);
@@ -411,7 +404,7 @@ void postMethod(const LocationConf *location, HttpResponse &response, HttpReques
 		ofstream outFile(finalUploadPath.c_str(), ios::binary);
 		if (!outFile.is_open())
 		{
-			
+
 			throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 		}
 
@@ -435,7 +428,6 @@ void postMethod(const LocationConf *location, HttpResponse &response, HttpReques
 		string bodyContent = "POST request received";
 		response.setResponseHeader("Content-Length", intToString(bodyContent.size()));
 		response.setResponseBody(bodyContent);
-		
 	}
 }
 
@@ -456,8 +448,8 @@ void deleteMethod(string &physicalPath, HttpResponse &response)
 void HttpResponse::buildStaticResponse(FdManager &manager)
 {
 	HttpRequest &request = manager.request;
-    HttpResponse &response = manager.response;
-    const Server &server = manager.blockServer;
+	HttpResponse &response = manager.response;
+	const Server &server = manager.blockServer;
 
 	string &path = manager.target_path;
 	const LocationConf *location = manager.location;
@@ -473,7 +465,7 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 
 	if (!realPath(root, path, physicalPath))
 	{
-		throw HttpException(STATUS_FORBIDDEN); 
+		throw HttpException(STATUS_FORBIDDEN);
 	}
 	if (location && !checkAllowedMethod(response, request, location, server))
 	{
@@ -492,9 +484,9 @@ void HttpResponse::buildStaticResponse(FdManager &manager)
 	response.serializeResponse(version);
 }
 
-void HttpResponse::serializeResponse(const string& httpVersion)
+void HttpResponse::serializeResponse(const string &httpVersion)
 {
-	
+
 	response_serialized.clear();
 	response_serialized.append(httpVersion + " " + intToString(status_code) + " " + message + "\r\n");
 	for (std::map<std::string, std::string>::const_iterator it = response_headers.begin(); it != response_headers.end(); ++it)
@@ -518,65 +510,74 @@ void HttpResponse::setResponseBody(const std::string &body)
 	response_body = body;
 }
 
-std::string trimWhitespace(const std::string& str) {
-    size_t start = str.find_first_not_of(" \t");
-    if (start == std::string::npos) 
-		return ""; 
-    size_t end = str.find_last_not_of(" \t");
-    	return str.substr(start, end - start + 1);
+std::string trimWhitespace(const std::string &str)
+{
+	size_t start = str.find_first_not_of(" \t");
+	if (start == std::string::npos)
+		return "";
+	size_t end = str.find_last_not_of(" \t");
+	return str.substr(start, end - start + 1);
 }
 
-void HttpResponse::parseCgiOutput() {
+void HttpResponse::parseCgiOutput()
+{
 
-    size_t header_end = response_body.find("\r\n\r\n");
-    size_t sep_len = 4;
+	size_t header_end = response_body.find("\r\n\r\n");
+	size_t sep_len = 4;
 
-    if (header_end == std::string::npos) {
-        header_end = response_body.find("\n\n");
-        sep_len = 2;
-    }
+	if (header_end == std::string::npos)
+	{
+		header_end = response_body.find("\n\n");
+		sep_len = 2;
+	}
 
-    std::string headers_str = response_body.substr(0, header_end);
-    std::string new_body = response_body.substr(header_end + sep_len);
+	std::string headers_str = response_body.substr(0, header_end);
+	std::string new_body = response_body.substr(header_end + sep_len);
 
-    std::istringstream iss(headers_str);
-    std::string line;
+	std::istringstream iss(headers_str);
+	std::string line;
 
-    while (std::getline(iss, line)) {
-        if (!line.empty() && line[line.size() - 1] == '\r') {
-            line.erase(line.size() - 1);
-        }
+	while (std::getline(iss, line))
+	{
+		if (!line.empty() && line[line.size() - 1] == '\r')
+		{
+			line.erase(line.size() - 1);
+		}
 
-        if (line.empty()) continue; 
+		if (line.empty())
+			continue;
 
-        size_t colon_pos = line.find(':');
-        if (colon_pos == std::string::npos) continue; 
+		size_t colon_pos = line.find(':');
+		if (colon_pos == std::string::npos)
+			continue;
 
-        std::string key = line.substr(0, colon_pos);
-        std::string value = trimWhitespace(line.substr(colon_pos + 1));
+		std::string key = line.substr(0, colon_pos);
+		std::string value = trimWhitespace(line.substr(colon_pos + 1));
 
-        if (key == "Status" || key == "status") {
-            std::istringstream status_iss(value);
-            status_iss >> status_code; 
+		if (key == "Status" || key == "status")
+		{
+			std::istringstream status_iss(value);
+			status_iss >> status_code;
 
-            std::string temp_msg;
-            std::getline(status_iss, temp_msg);
-            message = trimWhitespace(temp_msg); 
-        } 
-        else {
-            response_headers[key] = value;
-        }
-    }
+			std::string temp_msg;
+			std::getline(status_iss, temp_msg);
+			message = trimWhitespace(temp_msg);
+		}
+		else
+		{
+			response_headers[key] = value;
+		}
+	}
 
-    response_body = new_body;
+	response_body = new_body;
 
-    if (status_code == 0) {
-        status_code = 200;
-        message = "OK";
-    }
-    response_headers["Content-Length"] = intToString(response_body.size());
+	if (status_code == 0)
+	{
+		status_code = 200;
+		message = "OK";
+	}
+	response_headers["Content-Length"] = intToString(response_body.size());
 }
-
 
 int HttpResponse::send_response(int fd)
 {
@@ -589,7 +590,6 @@ int HttpResponse::send_response(int fd)
 	bytesSent += n;
 	if (bytesSent >= response_serialized.size())
 		return 1;
-	
+
 	return 0;
 }
-

@@ -14,6 +14,11 @@ int main (int ac, char *av[])
 {
     try
     {
+        if (ac > 2)
+        {
+            cerr << "the program can be executed only with ./webserv or ./webserv configFile\n";
+            return 1;
+        }
         signal(SIGINT, sighandler);
         signal(SIGPIPE, SIG_IGN);
         string fileName = "resources/configFiles/default.conf";

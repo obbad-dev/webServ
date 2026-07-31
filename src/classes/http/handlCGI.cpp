@@ -58,89 +58,107 @@ static bool interpreterIsExecutable(const std::string &interpreterPath)
 	return true;
 }
 
+static void closePipes(int to_cgi_fd[2], int from_cgi_fd[2])
+{
+    if (to_cgi_fd[READ] != -1)   close(to_cgi_fd[READ]);
+    if (to_cgi_fd[WRITE] != -1)  close(to_cgi_fd[WRITE]);
+    if (from_cgi_fd[READ] != -1) close(from_cgi_fd[READ]);
+    if (from_cgi_fd[WRITE] != -1) close(from_cgi_fd[WRITE]);
+}
+
+static void createPipes(int to_cgi_fd[2], int from_cgi_fd[2])
+{
+    if (pipe(to_cgi_fd) == -1)
+        throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+
+    if (pipe(from_cgi_fd) == -1)
+    {
+        closePipes(to_cgi_fd, from_cgi_fd);
+        throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+    }
+}
+
+static void setPipesNonBlocking(int to_cgi_fd[2], int from_cgi_fd[2])
+{
+    if (fcntl(to_cgi_fd[WRITE], F_SETFL, O_NONBLOCK) == -1 ||
+        fcntl(from_cgi_fd[READ], F_SETFL, O_NONBLOCK) == -1)
+    {
+        closePipes(to_cgi_fd, from_cgi_fd);
+        throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+    }
+}
+
+static void runCGIChild(FdManager &fdManager, const string &scriptName, const string &interpreterPath, int to_cgi_fd[2], int from_cgi_fd[2])
+{
+    dup2(to_cgi_fd[READ], STDIN_FILENO);
+    dup2(from_cgi_fd[WRITE], STDOUT_FILENO);
+    closePipes(to_cgi_fd, from_cgi_fd);
+
+    std::vector<char *> env(fdManager.env_vars.size() + 1);
+    for (size_t i = 0; i < fdManager.env_vars.size(); ++i)
+        env[i] = const_cast<char *>(fdManager.env_vars[i].c_str());
+    env[fdManager.env_vars.size()] = NULL;
+
+    char *args[] = {
+        const_cast<char *>(interpreterPath.c_str()),
+        const_cast<char *>(scriptName.c_str()),
+        NULL
+    };
+
+    execve(args[0], args, env.data());
+    exit(127);
+}
+
+static void setupParentSide(FdManager &fdManager, pid_t pid,
+                             int to_cgi_fd[2], int from_cgi_fd[2])
+{
+    close(to_cgi_fd[READ]);
+    close(from_cgi_fd[WRITE]);
+
+    fdManager.to_cgi_fd        = to_cgi_fd[WRITE];
+    fdManager.from_cgi_fd      = from_cgi_fd[READ];
+    fdManager.cgi_pid          = pid;
+    fdManager.cgi_state        = NOT_FINISHED;
+    fdManager.stat_fd_to_cgi   = NOT_FINISHED;
+    fdManager.stat_fd_from_cgi = NOT_FINISHED;
+
+    ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.from_cgi_fd, EPOLLIN);
+
+    if (fdManager.request.getBodyContent().empty())
+    {
+        close(fdManager.to_cgi_fd);
+        fdManager.stat_fd_to_cgi = FINISHED;
+    }
+    else
+    {
+        ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.to_cgi_fd, EPOLLOUT);
+    }
+}
+
 void HttpResponse::prepareCGI(FdManager &fdManager, const string &scriptName, const string &interpreterPath)
 {
-	if (!interpreterIsExecutable(interpreterPath))
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	int to_cgi_fd[2];
-	int from_cgi_fd[2];
-	if (pipe(to_cgi_fd) == -1)
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	if (pipe(from_cgi_fd) == -1)
-	{
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	}
-	if (fcntl(to_cgi_fd[WRITE], F_SETFL, O_NONBLOCK) == -1)
-	{
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		close(from_cgi_fd[READ]);
-		close(from_cgi_fd[WRITE]);
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	}
-	if (fcntl(from_cgi_fd[READ], F_SETFL, O_NONBLOCK) == -1)
-	{
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		close(from_cgi_fd[READ]);
-		close(from_cgi_fd[WRITE]);
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	}
+    if (!interpreterIsExecutable(interpreterPath))
+        throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 
-	makeEnvVars(fdManager);
+    int to_cgi_fd[2]   = { -1, -1 };
+    int from_cgi_fd[2] = { -1, -1 };
 
-	pid_t pid = fork();
-	if (pid == -1)
-	{
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		close(from_cgi_fd[READ]);
-		close(from_cgi_fd[WRITE]);
-		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
-	}
-	else if (pid == 0)
-	{
-		dup2(to_cgi_fd[READ], STDIN_FILENO);
-		dup2(from_cgi_fd[WRITE], STDOUT_FILENO);
+    createPipes(to_cgi_fd, from_cgi_fd);
+    setPipesNonBlocking(to_cgi_fd, from_cgi_fd);
 
-		close(to_cgi_fd[READ]);
-		close(to_cgi_fd[WRITE]);
-		close(from_cgi_fd[WRITE]);
-		close(from_cgi_fd[READ]);
-		char *env[fdManager.env_vars.size() + 1];
-		for (size_t i = 0; i < fdManager.env_vars.size(); ++i)
-		{
-			env[i] = const_cast<char *>(fdManager.env_vars[i].c_str());
-		}
-		env[fdManager.env_vars.size()] = NULL;
-		const char *cmd = interpreterPath.c_str();
-		char *args[] = {const_cast<char *>(cmd), const_cast<char *>(scriptName.c_str()), NULL};
-		execve(args[0], args, env);
-		exit(127);
-	}
-	else
-	{
-		close(to_cgi_fd[READ]);
-		close(from_cgi_fd[WRITE]);
-		fdManager.to_cgi_fd = to_cgi_fd[WRITE];
-		fdManager.from_cgi_fd = from_cgi_fd[READ];
-		fdManager.cgi_pid = pid;
-		fdManager.cgi_state = NOT_FINISHED;
-		fdManager.stat_fd_to_cgi = NOT_FINISHED;
-		fdManager.stat_fd_from_cgi = NOT_FINISHED;
-		ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.from_cgi_fd, EPOLLIN);
-		if (fdManager.request.getBodyContent().empty())
-		{
-			close(fdManager.to_cgi_fd);
-			fdManager.stat_fd_to_cgi = FINISHED;
-		}
-		else
-		{
-			ServerSide::add_fd_to_epoll(fdManager.epollFd, fdManager.to_cgi_fd, EPOLLOUT);
-		}
-	}
+    makeEnvVars(fdManager);
+
+    pid_t pid = fork();
+    if (pid == -1)
+    {
+        closePipes(to_cgi_fd, from_cgi_fd);
+        throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
+    }
+
+    if (pid == 0)
+        runCGIChild(fdManager, scriptName, interpreterPath, to_cgi_fd, from_cgi_fd);
+    else
+        setupParentSide(fdManager, pid, to_cgi_fd, from_cgi_fd);
 }
 
 static void finishCgiWrite(FdManager &fdManager)
@@ -179,18 +197,20 @@ static void finishCgiRead(FdManager &fdManager)
 
 static void handleCGIRead(FdManager &fdManager)
 {
-	char buffer[65536];
-	memset(buffer, 0, sizeof(buffer));
-	ssize_t bytes_read = read(fdManager.from_cgi_fd, buffer, sizeof(buffer));
+	char *buffer = new char[65536];
+	bzero(buffer, 65536);
+	ssize_t bytes_read = read(fdManager.from_cgi_fd, buffer, 65536);
 
 	if (bytes_read == -1)
 	{
+		delete[] buffer;
 		finishCgiRead(fdManager);
 		throw HttpException(STATUS_INTERNAL_SERVER_ERROR);
 	}
 
 	if (bytes_read == 0)
 	{
+		delete[] buffer;
 		finishCgiRead(fdManager);
 		int status;
 		waitpid(fdManager.cgi_pid, &status, 0);
@@ -202,6 +222,7 @@ static void handleCGIRead(FdManager &fdManager)
 	}
 	HttpResponse &response = fdManager.response;
 	response.setResponseBody(buffer, bytes_read);
+	delete[] buffer;
 }
 
 void HttpResponse::excuteCGI(FdManager &fdManager, int triggered_fd, uint32_t events)

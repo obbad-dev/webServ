@@ -73,21 +73,5 @@ public:
 
 	bool parseRequest(int clientFd, FdManager &fdManager);
 	bool isCgi(string &script_path, string &interpreter_path, FdManager &manager);
-	void resetRequest()
-	{
-		raw_buffer.clear();
-		method.clear();
-		path.clear();
-		protocolVersion.clear();
-		queryString.clear();
-		headers.clear();
-		_keep_alive = false;
-		body_type = NONE;
-		bodyContent.clear();
-		contentLength = 0;
-		expectedChunkSize = 0;
-		is_complete = false;
-		headers_parsed = false;
-		chunk_state = READ_SIZE;
-	}
+	void resetRequest();
 };
